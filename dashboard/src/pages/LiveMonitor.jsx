@@ -6,6 +6,7 @@ import StateBanner from '../components/StateBanner'
 import PieceCounter from '../components/PieceCounter'
 import DowntimeTable from '../components/DowntimeTable'
 import DebugFeedModal from '../components/DebugFeedModal'
+import CameraThumb from '../components/CameraThumb'
 import { formatDuration } from '../utils'
 
 function Clock() {
@@ -92,9 +93,14 @@ export default function LiveMonitor() {
         />
       </div>
 
-      {/* Large piece counter + downtime list */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {/* Large piece counter + camera thumbnail + downtime list */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <PieceCounter count={m.total_pieces_today || 0} />
+
+        <CameraThumb
+          frameB64={m.frame_debug_jpeg_b64 || null}
+          onClick={() => setDebugOpen(true)}
+        />
 
         <div className="bg-panel border border-border rounded-lg p-5 flex flex-col">
           <div className="text-[10px] font-mono tracking-[0.2em] text-[#8B949E] uppercase mb-4">
