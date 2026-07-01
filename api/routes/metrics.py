@@ -160,11 +160,12 @@ async def reset_piece_count(pool: Pool = Depends(get_pool)):
     today = date.today()
     day_start = datetime(today.year, today.month, today.day, tzinfo=timezone.utc)
     async with pool.acquire() as conn:
-        deleted = await conn.fetchval(
-            "DELETE FROM piece_events WHERE timestamp >= $1 RETURNING COUNT(*)",
-            day_start,
+        # execute() returns a status string like "DELETE 42" — parse the count from it
+        status = await conn.execute(
+            "DELETE FROM piece_events WHERE timestamp >= $1", day_start
         )
-    return {"deleted": deleted or 0}
+    deleted = int(status.split()[-1]) if status else 0
+    return {"deleted": deleted}
 
 
 @router.get("/pieces")
