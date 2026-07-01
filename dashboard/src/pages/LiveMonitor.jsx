@@ -32,31 +32,26 @@ export default function LiveMonitor() {
   const currentDuration = m.current_downtime_duration || 0
 
   return (
-    <div className="p-5 flex flex-col gap-5 max-w-[1600px] mx-auto">
+    <div className="p-2 flex flex-col gap-2 max-w-[1600px] mx-auto">
 
       {/* Top bar */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div>
-            <div className="text-[10px] font-mono tracking-[0.2em] text-[#8B949E] uppercase">
-              {m.shift_id ? `Shift #${m.shift_id}` : 'No Active Shift'}
-            </div>
-          </div>
+        <div className="text-[9px] font-mono tracking-[0.2em] text-[#8B949E] uppercase">
+          {m.shift_id ? `Shift #${m.shift_id}` : 'No Active Shift'}
         </div>
-        <div className="flex items-center gap-4">
-          {/* System status */}
-          <div className="flex items-center gap-2 text-xs font-mono">
-            <span className={`w-2 h-2 rounded-full ${connected ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} />
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 text-[10px] font-mono">
+            <span className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} />
             <span className={connected ? 'text-emerald-400' : 'text-red-400'}>
-              {connected ? 'AI CONNECTED' : 'DISCONNECTED'}
+              {connected ? 'LIVE' : 'DISCONNECTED'}
             </span>
           </div>
           <Clock />
           <button
             onClick={() => setDebugOpen(true)}
-            className="px-3 py-1 text-[10px] font-mono tracking-widest text-[#8B949E] border border-border rounded hover:border-amber/40 hover:text-amber transition-colors uppercase"
+            className="px-2 py-0.5 text-[9px] font-mono tracking-widest text-[#8B949E] border border-border rounded hover:border-amber/40 hover:text-amber transition-colors uppercase"
           >
-            Debug Feed
+            Debug
           </button>
         </div>
       </div>
@@ -65,7 +60,7 @@ export default function LiveMonitor() {
       <StateBanner state={m.state || 'UNKNOWN'} durationSeconds={currentDuration} />
 
       {/* Hero metrics row */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-2">
         <MetricCard
           label="Total Pieces"
           value={(m.total_pieces_today || 0).toLocaleString()}
@@ -100,8 +95,8 @@ export default function LiveMonitor() {
         />
       </div>
 
-      {/* Large piece counter + camera thumbnail + downtime list */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      {/* Piece counter + camera thumbnail + downtime list */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
         <PieceCounter count={m.total_pieces_today || 0} />
 
         <CameraThumb
@@ -109,8 +104,8 @@ export default function LiveMonitor() {
           onClick={() => setDebugOpen(true)}
         />
 
-        <div className="bg-panel border border-border rounded-lg p-5 flex flex-col">
-          <div className="text-[10px] font-mono tracking-[0.2em] text-[#8B949E] uppercase mb-4">
+        <div className="bg-panel border border-border rounded p-3 flex flex-col">
+          <div className="text-[9px] font-mono tracking-[0.2em] text-[#8B949E] uppercase mb-2">
             Downtime Events — Today
           </div>
           <div className="flex-1 overflow-auto">

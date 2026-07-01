@@ -12,12 +12,12 @@ export default function StateBanner({ state = 'UNKNOWN', durationSeconds = 0 }) 
   const duration = formatDuration(durationSeconds)
 
   return (
-    <div className={`border rounded-lg px-6 py-3 flex items-center gap-4 ${cfg.bg} ${cfg.border}`}>
-      <span className={`w-3 h-3 rounded-full animate-pulse ${cfg.dot}`} />
-      <span className={`font-mono font-bold tracking-widest text-sm ${cfg.text}`}>
+    <div className={`border rounded px-3 py-1.5 flex items-center gap-2 ${cfg.bg} ${cfg.border}`}>
+      <span className={`w-2 h-2 rounded-full animate-pulse flex-shrink-0 ${cfg.dot}`} />
+      <span className={`font-mono font-bold tracking-widest text-xs ${cfg.text}`}>
         {cfg.label}
       </span>
-      <span className="text-[#8B949E] font-mono text-sm ml-auto">
+      <span className="text-[#8B949E] font-mono text-xs ml-auto">
         {duration}
       </span>
     </div>
