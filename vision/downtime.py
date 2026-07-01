@@ -22,6 +22,8 @@ logger = logging.getLogger("harvest_oak.downtime")
 
 STATES = ("RUNNING", "SLOW", "IDLE", "UNKNOWN")
 
+_MIN_BELT_FPM = 1.0  # belt speed above this → line is running regardless of piece count
+
 
 @dataclass
 class DowntimeRecord:
@@ -70,6 +72,7 @@ class DowntimeTracker:
         motion_level: float,
         frame: Optional[np.ndarray],
         camera_ok: bool,
+        belt_speed_fpm: float = 0.0,
     ) -> str:
         """
         Called every frame. Returns current state string.
@@ -80,6 +83,11 @@ class DowntimeTracker:
         if now - self._day_start >= 86400:
             self.downtime_seconds_today = 0
             self._day_start = self._today_start()
+
+        # Belt movement is ground truth — if stickers are moving, line is running
+        if belt_speed_fpm >= _MIN_BELT_FPM:
+            self._last_piece_time = now
+            self._last_motion_time = now
 
         # Update last-seen timestamps
         if not camera_ok:

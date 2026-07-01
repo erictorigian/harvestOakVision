@@ -65,7 +65,7 @@ export default function LiveMonitor() {
       <StateBanner state={m.state || 'UNKNOWN'} durationSeconds={currentDuration} />
 
       {/* Hero metrics row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <MetricCard
           label="Total Pieces"
           value={(m.total_pieces_today || 0).toLocaleString()}
@@ -83,6 +83,13 @@ export default function LiveMonitor() {
           value={(m.line_speed_fpm_smoothed || 0).toFixed(1)}
           unit="FPM"
           sub={`instant: ${(m.line_speed_fpm || 0).toFixed(1)} FPM`}
+          accent="text-amber"
+        />
+        <MetricCard
+          label="Outfeed Belt Speed"
+          value={(m.outfeed_belt_speed_fpm_smoothed || 0).toFixed(1)}
+          unit="FPM"
+          sub={`instant: ${(m.outfeed_belt_speed_fpm || 0).toFixed(1)} FPM`}
           accent="text-amber"
         />
         <MetricCard

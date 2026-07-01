@@ -18,6 +18,8 @@ class LiveMetrics(BaseModel):
     pieces_per_hour_current: int
     line_speed_fpm: float
     line_speed_fpm_smoothed: float
+    outfeed_belt_speed_fpm: float = 0.0
+    outfeed_belt_speed_fpm_smoothed: float = 0.0
     downtime_seconds_today: int
     current_downtime_duration: int      # seconds in current downtime event (0 if running)
     shift_id: Optional[int] = None

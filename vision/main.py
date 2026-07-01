@@ -32,6 +32,7 @@ from vision.hardware import detect_hardware
 from vision.camera import CameraSource
 from vision.detector import BoardDetector
 from vision.speed import SpeedCalculator
+from vision.belt_speed import BeltSpeedTracker
 from vision.downtime import DowntimeTracker
 from vision.publisher import MetricsPublisher
 import vision.db as vision_db
@@ -109,6 +110,7 @@ async def run():
     camera = CameraSource(hw)
     detector = BoardDetector()
     speed_calc = SpeedCalculator(hw["frame_width"])
+    belt_speed = BeltSpeedTracker()
     downtime_tracker = DowntimeTracker()
     publisher = MetricsPublisher()
 
@@ -166,15 +168,18 @@ async def run():
         # Detection
         new_pieces, events, debug_frame = detector.process_frame(frame, debug=DEBUG_OVERLAY)
 
-        # Speed
+        # Speed (optical flow)
         fpm_instant, fpm_smoothed = speed_calc.process_frame(frame)
+
+        # Outfeed belt speed (sticker tracking)
+        outfeed_instant, outfeed_smoothed = belt_speed.process_frame(frame)
 
         # Motion level (for downtime detection)
         fg_mask = detector.get_fg_mask(frame)
         motion = detector.motion_level(fg_mask)
 
         # Downtime
-        state = downtime_tracker.update(new_pieces, motion, frame, camera_ok=True)
+        state = downtime_tracker.update(new_pieces, motion, frame, camera_ok=True, belt_speed_fpm=outfeed_smoothed)
 
         # Accumulate minute stats
         pieces_this_minute += new_pieces
@@ -230,6 +235,8 @@ async def run():
                 "pieces_per_hour_current": pph_current,
                 "line_speed_fpm": round(fpm_instant, 2),
                 "line_speed_fpm_smoothed": round(fpm_smoothed, 2),
+                "outfeed_belt_speed_fpm": round(outfeed_instant, 2),
+                "outfeed_belt_speed_fpm_smoothed": round(outfeed_smoothed, 2),
                 "downtime_seconds_today": downtime_today,
                 "current_downtime_duration": downtime_tracker.current_downtime_duration,
                 "shift_id": shift_id,
