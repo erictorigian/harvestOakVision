@@ -29,7 +29,7 @@ class BoardDetector:
     def __init__(self):
         self.line_y_pct     = float(os.environ.get("DETECTION_LINE_Y_PERCENT", "50")) / 100.0
         self.brightness_threshold = int(os.environ.get("BOARD_BRIGHTNESS_THRESHOLD", "90"))
-        self.min_board_width_pct  = float(os.environ.get("MIN_BOARD_WIDTH_PERCENT", "15")) / 100.0
+        self.min_board_width_pct  = float(os.environ.get("MIN_BOARD_WIDTH_PERCENT", "5")) / 100.0
         self.cooldown_ms    = int(os.environ.get("COUNT_COOLDOWN_MS", "800"))
 
         self._frame_h: int = 0
