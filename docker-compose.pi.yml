@@ -1,0 +1,40 @@
+# Raspberry Pi 4 overrides
+# Usage: docker compose -f docker-compose.yml -f docker-compose.pi.yml up
+
+version: '3.9'
+
+services:
+  vision:
+    platform: linux/arm64
+    environment:
+      - OMP_NUM_THREADS=2
+      - OPENBLAS_NUM_THREADS=2
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+    # Coral USB TPU device passthrough
+    devices:
+      - /dev/video0:/dev/video0
+      - /dev/bus/usb:/dev/bus/usb
+
+  api:
+    platform: linux/arm64
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+
+  dashboard:
+    platform: linux/arm64
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+
+  db:
+    platform: linux/arm64
+    deploy:
+      resources:
+        limits:
+          memory: 512m

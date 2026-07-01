@@ -1,0 +1,35 @@
+# Demo mode overlay — starts stack with seed data, no camera required.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.demo.yml up --build
+#
+# This overrides the vision service to use the synthetic test video
+# and runs the seed script once after the DB is ready.
+
+version: '3.9'
+
+services:
+  vision:
+    environment:
+      - CAMERA_RTSP_URL=
+      - TEST_VIDEO_PATH=/data/sample_conveyor.mp4
+      - DEBUG_OVERLAY=true
+      - CONVEYOR_VISIBLE_FEET=8.0
+
+  seed:
+    build: ./api
+    command: >
+      sh -c "
+        echo 'Waiting for DB...' &&
+        sleep 8 &&
+        python /scripts/seed_demo.py &&
+        echo 'Seed complete.'
+      "
+    environment:
+      - DB_URL=postgresql://harvest:${DB_PASSWORD:-testpassword}@db:5432/harvest_oak
+    volumes:
+      - ./scripts:/scripts:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"

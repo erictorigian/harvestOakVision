@@ -1,0 +1,81 @@
+version: '3.9'
+
+services:
+  db:
+    image: timescale/timescaledb:latest-pg15
+    environment:
+      POSTGRES_DB: harvest_oak
+      POSTGRES_USER: harvest
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+      - ./api/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U harvest -d harvest_oak"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  vision:
+    build: ./vision
+    environment:
+      - CAMERA_RTSP_URL=${CAMERA_RTSP_URL:-}
+      - CAMERA_INDEX=${CAMERA_INDEX:-0}
+      - CAMERA_HTTP_URL=${CAMERA_HTTP_URL:-}
+      - TEST_VIDEO_PATH=${TEST_VIDEO_PATH:-}
+      - CONVEYOR_VISIBLE_FEET=${CONVEYOR_VISIBLE_FEET:-8.0}
+      - DETECTION_LINE_Y_PERCENT=${DETECTION_LINE_Y_PERCENT:-50}
+      - DOWNTIME_THRESHOLD_SECONDS=${DOWNTIME_THRESHOLD_SECONDS:-45}
+      - MIN_CONTOUR_AREA=${MIN_CONTOUR_AREA:-2000}
+      - COUNT_COOLDOWN_MS=${COUNT_COOLDOWN_MS:-800}
+      - PRODUCTION_DIRECTION=${PRODUCTION_DIRECTION:-left_to_right}
+      - DEBUG_OVERLAY=${DEBUG_OVERLAY:-false}
+      - DB_URL=postgresql://harvest:${DB_PASSWORD}@db:5432/harvest_oak
+      - API_WS_URL=ws://api:8000/ws/vision_ingest
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+
+  api:
+    build: ./api
+    environment:
+      - DB_URL=postgresql://harvest:${DB_PASSWORD}@db:5432/harvest_oak
+      - TARGET_PIECES_PER_HOUR=${TARGET_PIECES_PER_HOUR:-450}
+      - SHIFT_DAY_START=${SHIFT_DAY_START:-06:00}
+      - SHIFT_AFT_START=${SHIFT_AFT_START:-14:00}
+      - SHIFT_NIGHT_START=${SHIFT_NIGHT_START:-22:00}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')\""]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  dashboard:
+    build:
+      context: ./dashboard
+      args:
+        VITE_API_URL: http://${HOST_IP:-localhost}:8000
+        VITE_WS_URL: ws://${HOST_IP:-localhost}:8000/ws/live
+    ports:
+      - "3001:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost/ || exit 1"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
