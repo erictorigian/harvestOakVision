@@ -1,11 +1,9 @@
 """
-Board detection — virtual tripwire approach using MOG2 background subtraction.
+Board detector — brightness threshold at the detection line.
 
-Logic:
-1. MOG2 isolates moving regions
-2. Contours crossing the detection line trigger a count
-3. Cooldown prevents double-counting a single board
-4. Direction filtering — only count forward-moving boards
+Dark belt + light wood boards: sample a horizontal strip at the detection line,
+threshold for brightness, exclude silver tape pixels, count the leading edge of
+each board (False → True transition). One count per board crossing.
 """
 from __future__ import annotations
 
@@ -19,155 +17,140 @@ import numpy as np
 
 logger = logging.getLogger("harvest_oak.detector")
 
+# Silver tape exclusion — same profile as belt_speed.py
+_SILVER_LOWER = np.array([0,   0,  180])
+_SILVER_UPPER = np.array([180, 50, 255])
+
+# Detection strip half-height (pixels above/below detection line to sample)
+_STRIP_HALF = 8
+
 
 class BoardDetector:
     def __init__(self):
-        # Config from env vars
-        self.line_y_pct = float(os.environ.get("DETECTION_LINE_Y_PERCENT", "50")) / 100.0
-        self.min_contour_area = int(os.environ.get("MIN_CONTOUR_AREA", "2000"))
-        self.cooldown_ms = int(os.environ.get("COUNT_COOLDOWN_MS", "800"))
-        self.direction = os.environ.get("PRODUCTION_DIRECTION", "left_to_right")
+        self.line_y_pct     = float(os.environ.get("DETECTION_LINE_Y_PERCENT", "50")) / 100.0
+        self.brightness_threshold = int(os.environ.get("BOARD_BRIGHTNESS_THRESHOLD", "90"))
+        self.min_board_width_pct  = float(os.environ.get("MIN_BOARD_WIDTH_PERCENT", "15")) / 100.0
+        self.cooldown_ms    = int(os.environ.get("COUNT_COOLDOWN_MS", "800"))
 
-        # Background subtractor — shadows=False reduces false positives on belt texture
-        self._mog2 = cv2.createBackgroundSubtractorMOG2(
-            history=500, varThreshold=50, detectShadows=False
-        )
-
-        # Morphological kernel for noise cleanup
-        self._kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-
-        # Per-frame state
         self._frame_h: int = 0
         self._frame_w: int = 0
         self._detection_y: int = 0
+        self._min_board_px: int = 0
 
-        # Cooldown tracking per horizontal zone (split frame into segments)
-        # Prevents re-counting the same board as it slowly crawls through the line
-        self._zone_last_count: dict[int, float] = {}
-        self._zone_count = 8  # number of horizontal segments
+        # Crossing state machine
+        self._board_over_line: bool = False
+        self._last_count_ms: float = 0.0
 
-        # Total counts
         self.total_pieces: int = 0
-        self._last_crossing_events: list[dict] = []  # cleared each second
 
-    def _line_y(self, frame_h: int) -> int:
-        return int(frame_h * self.line_y_pct)
+        # Keep a previous frame for motion fallback
+        self._prev_gray: Optional[np.ndarray] = None
 
-    def update_frame_size(self, h: int, w: int):
+    def _setup(self, h: int, w: int):
         if self._frame_h != h or self._frame_w != w:
             self._frame_h = h
             self._frame_w = w
-            self._detection_y = self._line_y(h)
-            logger.info(f"Frame size updated: {w}x{h}, detection line Y={self._detection_y}")
+            self._detection_y = int(h * self.line_y_pct)
+            self._min_board_px = int(w * self.min_board_width_pct)
+            logger.info(
+                f"Frame {w}x{h} — detection line Y={self._detection_y}, "
+                f"min board width={self._min_board_px}px"
+            )
 
-    def process_frame(self, frame: np.ndarray, debug: bool = False) -> tuple[int, list[dict], Optional[np.ndarray]]:
+    def _board_pixels_at_line(self, frame: np.ndarray) -> int:
+        """
+        Return how many pixels at the detection line look like wood board
+        (bright but not silver tape).
+        """
+        h, w = frame.shape[:2]
+        y0 = max(0, self._detection_y - _STRIP_HALF)
+        y1 = min(h, self._detection_y + _STRIP_HALF)
+        strip = frame[y0:y1]
+
+        gray   = cv2.cvtColor(strip, cv2.COLOR_BGR2GRAY)
+        hsv    = cv2.cvtColor(strip, cv2.COLOR_BGR2HSV)
+
+        # Bright pixels
+        _, bright = cv2.threshold(gray, self.brightness_threshold, 255, cv2.THRESH_BINARY)
+
+        # Silver tape mask
+        silver = cv2.inRange(hsv, _SILVER_LOWER, _SILVER_UPPER)
+
+        # Board = bright AND NOT silver
+        board_mask = cv2.bitwise_and(bright, cv2.bitwise_not(silver))
+
+        # Collapse rows → 1-D, count bright pixels
+        line_1d = np.max(board_mask, axis=0)
+        return int(np.count_nonzero(line_1d))
+
+    def process_frame(
+        self, frame: np.ndarray, debug: bool = False
+    ) -> tuple[int, list[dict], Optional[np.ndarray]]:
         """
         Process one frame.
         Returns: (new_pieces_this_frame, crossing_events, debug_frame_or_None)
         """
         h, w = frame.shape[:2]
-        self.update_frame_size(h, w)
+        self._setup(h, w)
 
-        # Apply background subtraction
-        fg_mask = self._mog2.apply(frame)
-
-        # Morphological cleanup — remove noise, fill holes
-        fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_OPEN, self._kernel)
-        fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_CLOSE, self._kernel)
-        fg_mask = cv2.dilate(fg_mask, self._kernel, iterations=2)
-
-        # Find contours
-        contours, _ = cv2.findContours(fg_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        now_ms = time.time() * 1000
+        board_px = self._board_pixels_at_line(frame)
+        board_now = board_px >= self._min_board_px
 
         new_pieces = 0
-        events = []
-        now_ms = time.time() * 1000
+        events: list[dict] = []
 
+        # Leading-edge trigger — count once per board arrival
+        if board_now and not self._board_over_line:
+            if (now_ms - self._last_count_ms) >= self.cooldown_ms:
+                self.total_pieces += 1
+                new_pieces += 1
+                self._last_count_ms = now_ms
+                events.append({
+                    "direction": "top_to_bottom",
+                    "confidence": min(1.0, board_px / w),
+                    "x": w // 2,
+                    "y": self._detection_y,
+                })
+                logger.debug(f"Board count #{self.total_pieces} — {board_px}px wide")
+
+        self._board_over_line = board_now
+
+        # Debug overlay
+        debug_frame: Optional[np.ndarray] = None
         if debug:
             debug_frame = frame.copy()
-            # Draw detection line
-            cv2.line(debug_frame, (0, self._detection_y), (w, self._detection_y), (0, 255, 255), 2)
-            cv2.putText(debug_frame, "DETECTION LINE", (10, self._detection_y - 8),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
-        else:
-            debug_frame = None
+            line_color = (0, 255, 0) if board_now else (0, 255, 255)
+            cv2.line(debug_frame, (0, self._detection_y), (w, self._detection_y), line_color, 2)
 
-        for contour in contours:
-            area = cv2.contourArea(contour)
-            if area < self.min_contour_area:
-                continue
+            label = f"BOARD {board_px}px" if board_now else "DETECTION LINE"
+            cv2.putText(debug_frame, label, (10, self._detection_y - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, line_color, 1)
 
-            x, y, bw, bh = cv2.boundingRect(contour)
-            cx = x + bw // 2
-            cy = y + bh // 2
-
-            # Check if contour intersects detection line
-            top = y
-            bottom = y + bh
-            crosses_line = top <= self._detection_y <= bottom
-
-            if debug and debug_frame is not None:
-                color = (0, 255, 0) if crosses_line else (100, 100, 100)
-                cv2.rectangle(debug_frame, (x, y), (x + bw, y + bh), color, 2)
-                cv2.circle(debug_frame, (cx, cy), 4, color, -1)
-
-            if not crosses_line:
-                continue
-
-            # Determine horizontal zone for cooldown
-            zone = int(cx / w * self._zone_count)
-            last_count = self._zone_last_count.get(zone, 0)
-
-            if (now_ms - last_count) < self.cooldown_ms:
-                continue  # still in cooldown for this zone
-
-            # Check motion direction (only count forward direction)
-            if not self._check_direction(contour, w):
-                continue
-
-            # Count it
-            self._zone_last_count[zone] = now_ms
-            self.total_pieces += 1
-            new_pieces += 1
-
-            event = {
-                "direction": self.direction,
-                "confidence": min(1.0, area / (self.min_contour_area * 5)),
-                "x": cx,
-                "y": cy,
-            }
-            events.append(event)
-
-            if debug and debug_frame is not None:
-                cv2.putText(debug_frame, f"COUNT! #{self.total_pieces}", (cx, cy - 10),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-
-        if debug and debug_frame is not None:
-            # State overlay
             cv2.putText(debug_frame, f"Total: {self.total_pieces}", (10, 30),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 0), 2)
 
-        self._last_crossing_events = events
+            if new_pieces:
+                cv2.putText(debug_frame, f"COUNT! #{self.total_pieces}",
+                            (w // 2 - 80, self._detection_y - 22),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
+
         return new_pieces, events, debug_frame
 
-    def _check_direction(self, contour: np.ndarray, frame_w: int) -> bool:
-        """
-        Minimal direction check: for now accept all crossings.
-        Phase 2: implement optical flow direction per contour.
-        """
-        # PHASE 2: Use tracked centroid history to determine direction vector
-        return True
-
     def motion_level(self, fg_mask: Optional[np.ndarray] = None) -> float:
-        """Return fraction of frame with active motion (0.0 – 1.0)."""
+        """Fraction of frame with motion — used as downtime fallback."""
         if fg_mask is None:
             return 0.0
-        total_pixels = fg_mask.shape[0] * fg_mask.shape[1]
-        motion_pixels = cv2.countNonZero(fg_mask)
-        return motion_pixels / total_pixels if total_pixels > 0 else 0.0
+        total = fg_mask.shape[0] * fg_mask.shape[1]
+        return cv2.countNonZero(fg_mask) / total if total > 0 else 0.0
 
     def get_fg_mask(self, frame: np.ndarray) -> np.ndarray:
-        """Return the foreground mask for a frame (used by downtime detector)."""
-        fg = self._mog2.apply(frame, learningRate=0)  # no learning — just classify
-        fg = cv2.morphologyEx(fg, cv2.MORPH_OPEN, self._kernel)
-        return fg
+        """Frame-difference mask for motion detection (downtime fallback)."""
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        if self._prev_gray is not None and self._prev_gray.shape == gray.shape:
+            diff = cv2.absdiff(gray, self._prev_gray)
+            _, mask = cv2.threshold(diff, 20, 255, cv2.THRESH_BINARY)
+        else:
+            mask = np.zeros_like(gray)
+        self._prev_gray = gray
+        return mask
