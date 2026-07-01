@@ -36,6 +36,8 @@ class SpeedCalculator:
         self.frame_width = frame_width
         self.conveyor_visible_feet = float(os.environ.get("CONVEYOR_VISIBLE_FEET", "8.0"))
         self.pixels_per_foot = frame_width / self.conveyor_visible_feet
+        # Below this FPM, treat as zero — filters camera vibration and JPEG noise
+        self._dead_band_fpm = float(os.environ.get("SPEED_DEAD_BAND_FPM", "3.0"))
 
         # Rolling window: (timestamp, fpm_value)
         self._window: collections.deque = collections.deque(maxlen=500)
@@ -84,11 +86,14 @@ class SpeedCalculator:
                     if median_dx > 0:
                         pixels_per_sec = median_dx / dt
                         feet_per_sec = pixels_per_sec / self.pixels_per_foot
-                        self.fpm_instant = feet_per_sec * 60.0
+                        raw_fpm = feet_per_sec * 60.0
+                        # Dead band: ignore readings below noise floor
+                        self.fpm_instant = raw_fpm if raw_fpm >= self._dead_band_fpm else 0.0
                     else:
                         self.fpm_instant = 0.0
 
-                    self._window.append((now, self.fpm_instant))
+                    if self.fpm_instant > 0:
+                        self._window.append((now, self.fpm_instant))
                     self._prev_points = good_new.reshape(-1, 1, 2)
                 else:
                     # Lost track — refresh feature points

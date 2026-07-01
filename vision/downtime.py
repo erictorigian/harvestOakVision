@@ -22,7 +22,7 @@ logger = logging.getLogger("harvest_oak.downtime")
 
 STATES = ("RUNNING", "SLOW", "IDLE", "UNKNOWN")
 
-_MIN_BELT_FPM = 1.0  # belt speed above this → line is running regardless of piece count
+_MIN_BELT_FPM = 3.0  # belt speed above this → line is running (must match SPEED_DEAD_BAND_FPM)
 
 
 @dataclass

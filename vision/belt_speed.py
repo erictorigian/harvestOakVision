@@ -51,6 +51,7 @@ class BeltSpeedTracker:
         self.fpm_instant: float = 0.0
         self.fpm_smoothed: float = 0.0
         self._roi = _load_roi()   # (x1_pct, x2_pct, y1_pct, y2_pct)
+        self._dead_band_fpm = float(os.environ.get("SPEED_DEAD_BAND_FPM", "3.0"))
 
     def _roi_pixels(self, h: int, w: int) -> tuple[int, int, int, int]:
         x1p, x2p, y1p, y2p = self._roi
@@ -127,10 +128,12 @@ class BeltSpeedTracker:
                 median_dy = float(np.median(dy_values))
                 if median_dy > 0:  # positive = moving downward (top-to-bottom belt)
                     pix_per_sec = median_dy / dt
-                    self.fpm_instant = (pix_per_sec / self._pixels_per_inch) * 60.0 / 12.0
+                    raw_fpm = (pix_per_sec / self._pixels_per_inch) * 60.0 / 12.0
+                    self.fpm_instant = raw_fpm if raw_fpm >= self._dead_band_fpm else 0.0
                 else:
                     self.fpm_instant = 0.0
-                self._window.append((now, self.fpm_instant))
+                if self.fpm_instant > 0:
+                    self._window.append((now, self.fpm_instant))
 
         cutoff = now - _WINDOW_SECONDS
         recent = [v for t, v in self._window if t >= cutoff and v > 0]
