@@ -4,6 +4,11 @@ Board detector — brightness threshold at the detection line.
 Dark belt + light wood boards: sample a horizontal strip at the detection line,
 threshold for brightness, exclude silver tape pixels, count the leading edge of
 each board (False → True transition). One count per board crossing.
+
+Belt ROI env vars (all as % of frame, 0–100):
+  BELT_X1_PCT, BELT_X2_PCT, BELT_Y1_PCT, BELT_Y2_PCT
+  Detection is restricted to this rectangle so people and equipment
+  outside the belt area can't trigger false counts.
 """
 from __future__ import annotations
 
@@ -32,10 +37,18 @@ class BoardDetector:
         self.min_board_width_pct  = float(os.environ.get("MIN_BOARD_WIDTH_PERCENT", "5")) / 100.0
         self.cooldown_ms    = int(os.environ.get("COUNT_COOLDOWN_MS", "800"))
 
+        # Belt ROI — shared with belt_speed.py
+        self._roi_x1_pct = float(os.environ.get("BELT_X1_PCT", "0"))  / 100.0
+        self._roi_x2_pct = float(os.environ.get("BELT_X2_PCT", "100")) / 100.0
+        self._roi_y1_pct = float(os.environ.get("BELT_Y1_PCT", "0"))  / 100.0
+        self._roi_y2_pct = float(os.environ.get("BELT_Y2_PCT", "100")) / 100.0
+
         self._frame_h: int = 0
         self._frame_w: int = 0
         self._detection_y: int = 0
         self._min_board_px: int = 0
+        self._roi_x1: int = 0
+        self._roi_x2: int = 0
 
         # Crossing state machine
         self._board_over_line: bool = False
@@ -51,9 +64,14 @@ class BoardDetector:
             self._frame_h = h
             self._frame_w = w
             self._detection_y = int(h * self.line_y_pct)
-            self._min_board_px = int(w * self.min_board_width_pct)
+            self._roi_x1 = int(self._roi_x1_pct * w)
+            self._roi_x2 = int(self._roi_x2_pct * w)
+            # min board width is relative to the ROI width, not full frame
+            roi_w = max(1, self._roi_x2 - self._roi_x1)
+            self._min_board_px = int(roi_w * self.min_board_width_pct)
             logger.info(
                 f"Frame {w}x{h} — detection line Y={self._detection_y}, "
+                f"belt ROI X=[{self._roi_x1},{self._roi_x2}], "
                 f"min board width={self._min_board_px}px"
             )
 
@@ -79,8 +97,15 @@ class BoardDetector:
         # Board = bright AND NOT silver
         board_mask = cv2.bitwise_and(bright, cv2.bitwise_not(silver))
 
-        # Collapse rows → 1-D, count bright pixels
+        # Collapse rows → 1-D
         line_1d = np.max(board_mask, axis=0)
+
+        # Restrict to belt ROI X range — zero out columns outside the belt
+        if self._roi_x1 > 0:
+            line_1d[:self._roi_x1] = 0
+        if self._roi_x2 < w:
+            line_1d[self._roi_x2:] = 0
+
         return int(np.count_nonzero(line_1d))
 
     def process_frame(
@@ -120,11 +145,24 @@ class BoardDetector:
         debug_frame: Optional[np.ndarray] = None
         if debug:
             debug_frame = frame.copy()
+
+            # Belt ROI rectangle (cyan)
+            ry1 = int(self._roi_y1_pct * h)
+            ry2 = int(self._roi_y2_pct * h)
+            cv2.rectangle(debug_frame, (self._roi_x1, ry1), (self._roi_x2, ry2), (255, 255, 0), 1)
+
+            # Detection line — only within ROI X range
             line_color = (0, 255, 0) if board_now else (0, 255, 255)
-            cv2.line(debug_frame, (0, self._detection_y), (w, self._detection_y), line_color, 2)
+            cv2.line(debug_frame,
+                     (self._roi_x1, self._detection_y),
+                     (self._roi_x2, self._detection_y),
+                     line_color, 2)
+            # Dim extensions outside ROI to show full-frame line position
+            cv2.line(debug_frame, (0, self._detection_y), (self._roi_x1, self._detection_y), (60, 60, 60), 1)
+            cv2.line(debug_frame, (self._roi_x2, self._detection_y), (w, self._detection_y), (60, 60, 60), 1)
 
             label = f"BOARD {board_px}px" if board_now else "DETECTION LINE"
-            cv2.putText(debug_frame, label, (10, self._detection_y - 10),
+            cv2.putText(debug_frame, label, (self._roi_x1 + 4, self._detection_y - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, line_color, 1)
 
             cv2.putText(debug_frame, f"Total: {self.total_pieces}", (10, 30),
