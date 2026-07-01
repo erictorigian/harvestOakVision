@@ -171,8 +171,20 @@ async def run():
         # Speed (optical flow)
         fpm_instant, fpm_smoothed = speed_calc.process_frame(frame)
 
-        # Outfeed belt speed (sticker tracking)
+        # Outfeed belt speed (silver tape tracking)
         outfeed_instant, outfeed_smoothed = belt_speed.process_frame(frame)
+
+        # Draw detected tape marks on debug overlay
+        if DEBUG_OVERLAY and debug_frame is not None:
+            for (tx, ty) in belt_speed._prev_centroids:
+                cv2.circle(debug_frame, (int(tx), int(ty)), 10, (255, 165, 0), 2)
+                cv2.putText(debug_frame, "TAPE", (int(tx) + 12, int(ty) + 4),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 165, 0), 1)
+            if belt_speed._pixels_per_inch:
+                cv2.putText(debug_frame,
+                            f"Belt: {outfeed_instant:.1f} FPM ({belt_speed._pixels_per_inch:.1f}px/in)",
+                            (10, debug_frame.shape[0] - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 165, 0), 2)
 
         # Motion level (for downtime detection)
         fg_mask = detector.get_fg_mask(frame)

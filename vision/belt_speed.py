@@ -1,9 +1,9 @@
 """
-Outfeed belt speed — tracks colored sticker positions on a top-to-bottom belt.
+Outfeed belt speed — tracks silver tape marks on a top-to-bottom belt.
 
-Stickers are placed exactly 12 inches apart (red at ends, yellow between).
-Vertical displacement between frames gives velocity; known spacing auto-calibrates
-pixels-per-inch so no separate env-var calibration is needed.
+Marks are placed exactly 12 inches apart. Vertical displacement between frames
+gives velocity; known spacing auto-calibrates pixels-per-inch so no separate
+env-var calibration is needed.
 """
 from __future__ import annotations
 
@@ -18,19 +18,15 @@ import numpy as np
 logger = logging.getLogger("harvest_oak.belt_speed")
 
 _SPACING_INCHES    = 12.0
-_MIN_AREA          = 80      # px² — reject noise
-_MAX_AREA          = 8000    # px² — reject large belt-texture blobs
+_MIN_AREA          = 300     # px² — tape is larger than stickers
+_MAX_AREA          = 30000   # px² — allow wide tape strips
 _WINDOW_SECONDS    = 5.0
-_X_MATCH_THRESHOLD = 60      # px — max horizontal drift between frames for same sticker
+_X_MATCH_THRESHOLD = 80      # px — max horizontal drift between frames for same mark
 
-# Red wraps around the HSV hue wheel — two ranges needed
-_RED_LOWER1 = np.array([0,   120,  70])
-_RED_UPPER1 = np.array([10,  255, 255])
-_RED_LOWER2 = np.array([170, 120,  70])
-_RED_UPPER2 = np.array([180, 255, 255])
-
-_YEL_LOWER  = np.array([20, 120, 100])
-_YEL_UPPER  = np.array([35, 255, 255])
+# Silver/metallic tape: low saturation, high brightness
+# Hue is irrelevant — metallic is near-achromatic
+_SILVER_LOWER = np.array([0,   0,  180])
+_SILVER_UPPER = np.array([180, 50, 255])
 
 
 class BeltSpeedTracker:
@@ -43,13 +39,9 @@ class BeltSpeedTracker:
         self.fpm_smoothed: float = 0.0
 
     def _detect_stickers(self, frame: np.ndarray) -> list[tuple[float, float]]:
-        """Return sticker centroids (x, y) sorted top-to-bottom."""
+        """Return silver tape mark centroids (x, y) sorted top-to-bottom."""
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-
-        red = (cv2.inRange(hsv, _RED_LOWER1, _RED_UPPER1) |
-               cv2.inRange(hsv, _RED_LOWER2, _RED_UPPER2))
-        yel = cv2.inRange(hsv, _YEL_LOWER, _YEL_UPPER)
-        mask = cv2.bitwise_or(red, yel)
+        mask = cv2.inRange(hsv, _SILVER_LOWER, _SILVER_UPPER)
 
         k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
         mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, k)
