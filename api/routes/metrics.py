@@ -153,6 +153,20 @@ async def get_hourly(
     return buckets
 
 
+@router.post("/pieces/reset")
+async def reset_piece_count(pool: Pool = Depends(get_pool)):
+    """Delete all piece_events recorded today. Resets the dashboard counter to zero."""
+    from datetime import date
+    today = date.today()
+    day_start = datetime(today.year, today.month, today.day, tzinfo=timezone.utc)
+    async with pool.acquire() as conn:
+        deleted = await conn.fetchval(
+            "DELETE FROM piece_events WHERE timestamp >= $1 RETURNING COUNT(*)",
+            day_start,
+        )
+    return {"deleted": deleted or 0}
+
+
 @router.get("/pieces")
 async def get_pieces(
     start: datetime = Query(...),

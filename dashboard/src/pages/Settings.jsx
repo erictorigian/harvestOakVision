@@ -74,6 +74,8 @@ export default function Settings() {
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState(null)
   const [testing, setTesting] = useState(false)
+  const [resetConfirm, setResetConfirm] = useState(false)
+  const [resetMsg, setResetMsg] = useState(null)
 
   useEffect(() => {
     fetch(`${API}/api/settings`)
@@ -108,6 +110,24 @@ export default function Settings() {
       setTimeout(() => setSaved(false), 3000)
     } catch (e) {
       setError(e.message)
+    }
+  }
+
+  const handleReset = async () => {
+    if (!resetConfirm) {
+      setResetConfirm(true)
+      return
+    }
+    try {
+      const res = await fetch(`${API}/api/metrics/pieces/reset`, { method: 'POST' })
+      const data = await res.json()
+      setResetMsg(`Cleared ${data.deleted} piece records.`)
+      setTimeout(() => setResetMsg(null), 4000)
+    } catch (e) {
+      setResetMsg('Reset failed — check API connection.')
+      setTimeout(() => setResetMsg(null), 4000)
+    } finally {
+      setResetConfirm(false)
     }
   }
 
@@ -229,6 +249,37 @@ export default function Settings() {
           <Field label="Night Shift" name="shift_night_start" value={form.shift_night_start} onChange={set} />
         </div>
         <div className="text-[10px] font-mono text-[#484F58]">24-hour format HH:MM</div>
+      </Section>
+
+      <Section title="Operations">
+        <div className="flex flex-col gap-2">
+          <div className="text-[10px] font-mono text-[#484F58]">
+            Deletes all piece_events recorded today. Use at shift start or after a calibration run.
+          </div>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={handleReset}
+              className={`px-4 py-2 text-xs font-mono tracking-wider rounded border transition-colors ${
+                resetConfirm
+                  ? 'border-red-500 text-red-400 bg-red-500/10 hover:bg-red-500/20'
+                  : 'border-border text-[#8B949E] hover:border-red-500/40 hover:text-red-400'
+              }`}
+            >
+              {resetConfirm ? 'CONFIRM RESET?' : 'RESET PIECE COUNT'}
+            </button>
+            {resetConfirm && (
+              <button
+                onClick={() => setResetConfirm(false)}
+                className="text-xs font-mono text-[#484F58] hover:text-[#8B949E] transition-colors"
+              >
+                cancel
+              </button>
+            )}
+            {resetMsg && (
+              <span className="text-xs font-mono text-emerald-400">{resetMsg}</span>
+            )}
+          </div>
+        </div>
       </Section>
 
       {/* Save button */}
