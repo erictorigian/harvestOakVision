@@ -14,7 +14,7 @@ export default function PieceCounter({ count = 0 }) {
   }, [count])
 
   return (
-    <div className="flex flex-col items-center justify-center bg-panel border border-border rounded p-4">
+    <div className="flex flex-col items-center justify-start bg-panel border border-border rounded p-4">
       <div className="text-[9px] font-mono tracking-[0.2em] text-[#8B949E] uppercase mb-1">
         Total Pieces Today
       </div>

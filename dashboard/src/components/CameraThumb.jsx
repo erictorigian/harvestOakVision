@@ -8,7 +8,7 @@ export default function CameraThumb({ frameB64, onClick }) {
         <span>Camera Feed</span>
         <span className="text-[#8B949E] group-hover:text-amber transition-colors">&#x26F6; expand</span>
       </div>
-      <div className="flex-1 flex items-center justify-center bg-black rounded overflow-hidden min-h-[140px]">
+      <div className="flex-1 flex items-start justify-center bg-black rounded overflow-hidden min-h-[140px]">
         {frameB64 ? (
           <img
             src={`data:image/jpeg;base64,${frameB64}`}
