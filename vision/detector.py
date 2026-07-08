@@ -24,10 +24,6 @@ import numpy as np
 
 logger = logging.getLogger("harvest_oak.detector")
 
-# Silver tape exclusion (HSV: near-white, low saturation, high value)
-_SILVER_LOWER = np.array([0,   0,  180])
-_SILVER_UPPER = np.array([180, 50, 255])
-
 _STRIP_HALF = 8          # half-height of the detection strip in pixels
 _BG_ALPHA   = 0.02       # EMA speed — how fast baseline tracks belt changes
 
@@ -92,7 +88,6 @@ class BoardDetector:
         strip = frame[y0:y1]
 
         gray = cv2.cvtColor(strip, cv2.COLOR_BGR2GRAY)
-        hsv  = cv2.cvtColor(strip, cv2.COLOR_BGR2HSV)
 
         # Per-column mean brightness within ROI
         roi_gray = gray[:, self._roi_x1:self._roi_x2]
@@ -106,11 +101,6 @@ class BoardDetector:
             return 0, 0
 
         deviation = np.abs(col_means - self._strip_bg)
-
-        # Zero out silver tape columns so tape marks don't trigger counts
-        silver = cv2.inRange(hsv, _SILVER_LOWER, _SILVER_UPPER)
-        silver_cols = np.max(silver, axis=0)[self._roi_x1:self._roi_x2].astype(bool)
-        deviation[silver_cols] = 0
 
         board_cols = int(np.count_nonzero(deviation > self.deviation_threshold))
         peak_dev   = int(np.max(deviation)) if deviation.size > 0 else 0

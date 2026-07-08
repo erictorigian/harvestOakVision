@@ -38,7 +38,7 @@ services:
       - BELT_Y1_PCT=${BELT_Y1_PCT:-0}
       - BELT_Y2_PCT=${BELT_Y2_PCT:-100}
       - LINE_DEVIATION_THRESHOLD=${LINE_DEVIATION_THRESHOLD:-25}
-      - MIN_BOARD_WIDTH_PERCENT=${MIN_BOARD_WIDTH_PERCENT:-5}
+      - MIN_BOARD_WIDTH_PERCENT=${MIN_BOARD_WIDTH_PERCENT:-2}
       - SPEED_DEAD_BAND_FPM=${SPEED_DEAD_BAND_FPM:-3.0}
       - DB_URL=postgresql://harvest:${DB_PASSWORD}@db:5432/harvest_oak
       - API_WS_URL=ws://api:8000/ws/vision_ingest
