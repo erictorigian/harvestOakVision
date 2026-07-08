@@ -190,11 +190,8 @@ async def run():
         fg_mask = detector.get_fg_mask(frame)
         motion = detector.motion_level(fg_mask)
 
-        # Downtime — take whichever speed source is non-zero.
-        # Optical flow (fpm_smoothed) fails on smooth belt surfaces; tape tracker
-        # (outfeed_smoothed) is more reliable when tape marks are present.
-        effective_speed = max(fpm_smoothed, outfeed_smoothed)
-        state = downtime_tracker.update(new_pieces, motion, frame, camera_ok=True, belt_speed_fpm=effective_speed)
+        # Downtime is board-flow driven — RUNNING only when boards cross the tripwire.
+        state = downtime_tracker.update(new_pieces, motion, frame, camera_ok=True)
 
         # Accumulate minute stats
         pieces_this_minute += new_pieces

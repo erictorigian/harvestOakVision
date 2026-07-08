@@ -1,12 +1,12 @@
 """
-Downtime state machine — belt-speed driven.
+Downtime state machine — board-flow driven.
 
-The belt runs continuously all day. Downtime = belt stopped, not gaps
-between parts at the counting line.
+The line is RUNNING only when boards are actively crossing the detection
+tripwire. Belt moving with no boards = IDLE (machine not feeding).
 
 States:
-  RUNNING  — belt moving above speed threshold
-  IDLE     — belt stopped for longer than DOWNTIME_THRESHOLD_SECONDS
+  RUNNING  — a board crossed the tripwire within DOWNTIME_THRESHOLD_SECONDS
+  IDLE     — no board detected for longer than DOWNTIME_THRESHOLD_SECONDS
   UNKNOWN  — camera issue / stream drop
 """
 from __future__ import annotations
@@ -23,9 +23,6 @@ import numpy as np
 logger = logging.getLogger("harvest_oak.downtime")
 
 STATES = ("RUNNING", "IDLE", "UNKNOWN")
-
-_MIN_BELT_FPM = 3.0   # must match SPEED_DEAD_BAND_FPM
-_RUNNING_CONFIRM_SEC = 5.0  # speed must stay above threshold this long to reset stopped timer
 
 
 @dataclass
@@ -50,9 +47,9 @@ class DowntimeTracker:
         os.makedirs(snapshot_dir, exist_ok=True)
 
         self.state: str = "UNKNOWN"
-        self._last_running_time: float = time.time()
+        # Start at 0 so system begins IDLE until first board is detected.
+        self._last_piece_time: float = 0.0
         self._state_start_time: float = time.time()
-        self._speed_above_since: Optional[float] = None  # when speed first exceeded threshold
 
         self._current_downtime: Optional[DowntimeRecord] = None
         self._completed_events: list[DowntimeRecord] = []
@@ -72,11 +69,11 @@ class DowntimeTracker:
         motion_level: float,
         frame: Optional[np.ndarray],
         camera_ok: bool,
-        belt_speed_fpm: float = 0.0,
+        belt_speed_fpm: float = 0.0,  # kept for API compatibility, not used for state
     ) -> str:
         """
         Called every frame. Returns current state string.
-        Downtime is driven entirely by belt speed — not piece gaps.
+        State is driven entirely by board detections at the tripwire.
         """
         now = time.time()
 
@@ -84,25 +81,14 @@ class DowntimeTracker:
             self.downtime_seconds_today = 0
             self._day_start = self._today_start()
 
+        if new_pieces > 0:
+            self._last_piece_time = now
+
         if not camera_ok:
             new_state = "UNKNOWN"
-            self._speed_above_since = None
-        elif belt_speed_fpm >= _MIN_BELT_FPM:
-            # Require sustained speed before resetting the stopped timer.
-            # A single noisy frame from someone walking past won't cancel downtime.
-            if self._speed_above_since is None:
-                self._speed_above_since = now
-            if now - self._speed_above_since >= _RUNNING_CONFIRM_SEC:
-                self._last_running_time = now
-                new_state = "RUNNING"
-            else:
-                # Speed just came back but not confirmed yet — hold current stopped status
-                since_running = now - self._last_running_time
-                new_state = "IDLE" if since_running >= self.threshold_sec else "RUNNING"
         else:
-            self._speed_above_since = None
-            since_running = now - self._last_running_time
-            new_state = "IDLE" if since_running >= self.threshold_sec else "RUNNING"
+            since_piece = now - self._last_piece_time
+            new_state = "RUNNING" if since_piece < self.threshold_sec else "IDLE"
 
         if new_state != self.state:
             self._on_state_change(self.state, new_state, frame, now)
@@ -133,7 +119,7 @@ class DowntimeTracker:
             )
             logger.warning(f"Downtime started: {new_state} (was {old_state})")
 
-        elif was_downtime and self._current_downtime:
+        elif was_downtime and not is_downtime and self._current_downtime:
             self._current_downtime.end_time = now
             self._completed_events.append(self._current_downtime)
             logger.info(
@@ -143,6 +129,7 @@ class DowntimeTracker:
             self._current_downtime = None
 
         elif is_downtime and was_downtime and self._current_downtime:
+            # State changed within downtime types (e.g. IDLE → UNKNOWN)
             self._current_downtime.end_time = now
             self._completed_events.append(self._current_downtime)
             snap_path = self._save_snapshot(frame, new_state, now) if frame is not None else None
