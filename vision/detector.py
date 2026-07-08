@@ -75,10 +75,10 @@ class BoardDetector:
                 f"min board width={self._min_board_px}px"
             )
 
-    def _board_pixels_at_line(self, frame: np.ndarray) -> int:
+    def _board_pixels_at_line(self, frame: np.ndarray) -> tuple[int, int]:
         """
-        Return how many pixels at the detection line look like wood board
-        (bright but not silver tape).
+        Return (bright_pixel_count, peak_brightness) at the detection line
+        for pixels that look like wood board (bright but not silver tape).
         """
         h, w = frame.shape[:2]
         y0 = max(0, self._detection_y - _STRIP_HALF)
@@ -106,7 +106,11 @@ class BoardDetector:
         if self._roi_x2 < w:
             line_1d[self._roi_x2:] = 0
 
-        return int(np.count_nonzero(line_1d))
+        # Peak brightness in the ROI strip (for threshold tuning)
+        roi_gray = gray[:, self._roi_x1:self._roi_x2]
+        peak = int(np.max(roi_gray)) if roi_gray.size > 0 else 0
+
+        return int(np.count_nonzero(line_1d)), peak
 
     def process_frame(
         self, frame: np.ndarray, debug: bool = False
@@ -119,7 +123,7 @@ class BoardDetector:
         self._setup(h, w)
 
         now_ms = time.time() * 1000
-        board_px = self._board_pixels_at_line(frame)
+        board_px, peak_brightness = self._board_pixels_at_line(frame)
         board_now = board_px >= self._min_board_px
 
         new_pieces = 0
@@ -137,7 +141,7 @@ class BoardDetector:
                     "x": w // 2,
                     "y": self._detection_y,
                 })
-                logger.debug(f"Board count #{self.total_pieces} — {board_px}px wide")
+                logger.debug(f"Board count #{self.total_pieces} — {board_px}px wide, peak={peak_brightness}")
 
         self._board_over_line = board_now
 
@@ -161,9 +165,14 @@ class BoardDetector:
             cv2.line(debug_frame, (0, self._detection_y), (self._roi_x1, self._detection_y), (60, 60, 60), 1)
             cv2.line(debug_frame, (self._roi_x2, self._detection_y), (w, self._detection_y), (60, 60, 60), 1)
 
-            label = f"BOARD {board_px}px" if board_now else "DETECTION LINE"
+            # Show bright-px count vs. required, and peak brightness vs. threshold
+            # Green when board detected, yellow when below threshold
+            if board_now:
+                label = f"BOARD {board_px}px/{self._min_board_px}px  peak={peak_brightness}"
+            else:
+                label = f"LINE  {board_px}px/{self._min_board_px}px  peak={peak_brightness}/{self.brightness_threshold}"
             cv2.putText(debug_frame, label, (self._roi_x1 + 4, self._detection_y - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, line_color, 1)
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, line_color, 1)
 
             cv2.putText(debug_frame, f"Total: {self.total_pieces}", (10, 30),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 0), 2)
