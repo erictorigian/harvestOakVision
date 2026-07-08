@@ -24,7 +24,8 @@ logger = logging.getLogger("harvest_oak.downtime")
 
 STATES = ("RUNNING", "IDLE", "UNKNOWN")
 
-_MIN_BELT_FPM = 3.0  # must match SPEED_DEAD_BAND_FPM
+_MIN_BELT_FPM = 3.0   # must match SPEED_DEAD_BAND_FPM
+_RUNNING_CONFIRM_SEC = 5.0  # speed must stay above threshold this long to reset stopped timer
 
 
 @dataclass
@@ -51,6 +52,7 @@ class DowntimeTracker:
         self.state: str = "UNKNOWN"
         self._last_running_time: float = time.time()
         self._state_start_time: float = time.time()
+        self._speed_above_since: Optional[float] = None  # when speed first exceeded threshold
 
         self._current_downtime: Optional[DowntimeRecord] = None
         self._completed_events: list[DowntimeRecord] = []
@@ -84,10 +86,21 @@ class DowntimeTracker:
 
         if not camera_ok:
             new_state = "UNKNOWN"
+            self._speed_above_since = None
         elif belt_speed_fpm >= _MIN_BELT_FPM:
-            self._last_running_time = now
-            new_state = "RUNNING"
+            # Require sustained speed before resetting the stopped timer.
+            # A single noisy frame from someone walking past won't cancel downtime.
+            if self._speed_above_since is None:
+                self._speed_above_since = now
+            if now - self._speed_above_since >= _RUNNING_CONFIRM_SEC:
+                self._last_running_time = now
+                new_state = "RUNNING"
+            else:
+                # Speed just came back but not confirmed yet — hold current stopped status
+                since_running = now - self._last_running_time
+                new_state = "IDLE" if since_running >= self.threshold_sec else "RUNNING"
         else:
+            self._speed_above_since = None
             since_running = now - self._last_running_time
             new_state = "IDLE" if since_running >= self.threshold_sec else "RUNNING"
 
