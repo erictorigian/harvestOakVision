@@ -3,6 +3,11 @@ Line speed calculation using Lucas-Kanade sparse optical flow.
 
 Converts pixel velocity → feet per minute using conveyor calibration.
 Smoothed over a 5-second rolling window.
+
+Belt ROI env vars (all as % of frame, 0–100):
+  BELT_X1_PCT, BELT_X2_PCT, BELT_Y1_PCT, BELT_Y2_PCT
+  Feature detection is confined to this rectangle so motion outside the
+  target belt (people, second belt, equipment) doesn't corrupt the reading.
 """
 from __future__ import annotations
 
@@ -39,6 +44,12 @@ class SpeedCalculator:
         # Below this FPM, treat as zero — filters camera vibration and JPEG noise
         self._dead_band_fpm = float(os.environ.get("SPEED_DEAD_BAND_FPM", "3.0"))
 
+        # Belt ROI — same env vars as detector.py and belt_speed.py
+        self._roi_x1_pct = float(os.environ.get("BELT_X1_PCT", "0"))  / 100.0
+        self._roi_x2_pct = float(os.environ.get("BELT_X2_PCT", "100")) / 100.0
+        self._roi_y1_pct = float(os.environ.get("BELT_Y1_PCT", "0"))  / 100.0
+        self._roi_y2_pct = float(os.environ.get("BELT_Y2_PCT", "100")) / 100.0
+
         # Rolling window: (timestamp, fpm_value)
         self._window: collections.deque = collections.deque(maxlen=500)
         self._window_seconds = 5.0
@@ -52,7 +63,9 @@ class SpeedCalculator:
 
         logger.info(
             f"SpeedCalc init: {self.conveyor_visible_feet}ft visible, "
-            f"{self.pixels_per_foot:.1f} px/ft, frame_width={frame_width}"
+            f"{self.pixels_per_foot:.1f} px/ft, frame_width={frame_width}, "
+            f"ROI X=[{self._roi_x1_pct*100:.0f}%,{self._roi_x2_pct*100:.0f}%] "
+            f"Y=[{self._roi_y1_pct*100:.0f}%,{self._roi_y2_pct*100:.0f}%]"
         )
 
     def update_calibration(self, conveyor_visible_feet: float):
@@ -101,13 +114,16 @@ class SpeedCalculator:
 
         # Refresh feature points periodically or on first frame
         if self._prev_points is None or len(self._prev_points) < 20:
-            # Look for features in the conveyor zone (center vertical band)
             h, w = gray.shape
-            roi = gray[int(h * 0.3):int(h * 0.7), :]
+            rx1 = int(w * self._roi_x1_pct)
+            rx2 = int(w * self._roi_x2_pct)
+            ry1 = int(h * self._roi_y1_pct)
+            ry2 = int(h * self._roi_y2_pct)
+            roi = gray[ry1:ry2, rx1:rx2]
             points = cv2.goodFeaturesToTrack(roi, mask=None, **_FEATURE_PARAMS)
             if points is not None:
-                # Adjust Y coordinates back to full frame
-                points[:, :, 1] += int(h * 0.3)
+                points[:, :, 0] += rx1  # shift X back to full-frame coords
+                points[:, :, 1] += ry1  # shift Y back to full-frame coords
                 self._prev_points = points
             else:
                 self._prev_points = None
