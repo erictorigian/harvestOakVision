@@ -2,10 +2,12 @@ import { useState, useEffect } from 'react'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
+const SEP = { borderBottom: '1px solid rgba(84,84,88,0.35)' }
+
 function Field({ label, name, value, onChange, type = 'text', min, max, step, hint }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label className="text-[10px] font-mono tracking-[0.15em] text-[#8B949E] uppercase">
+      <label className="text-[11px] font-medium text-[rgba(235,235,245,0.5)] uppercase tracking-wider">
         {label}
       </label>
       <input
@@ -16,19 +18,21 @@ function Field({ label, name, value, onChange, type = 'text', min, max, step, hi
         min={min}
         max={max}
         step={step}
-        className="bg-surface border border-border rounded px-3 py-2 text-sm font-mono text-[#E6EDF3] focus:outline-none focus:border-amber/50 w-full"
+        className="bg-[#3A3A3C] rounded-xl px-3 py-2.5 text-[13px] text-white border-0 focus:outline-none focus:ring-2 focus:ring-[#0A84FF]/50 w-full transition-shadow placeholder-white/20"
       />
-      {hint && <div className="text-[10px] text-[#484F58] font-mono">{hint}</div>}
+      {hint && <div className="text-[11px] text-[rgba(235,235,245,0.25)]">{hint}</div>}
     </div>
   )
 }
 
 function RangeField({ label, name, value, onChange, min, max, step = 1, unit, hint }) {
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex justify-between items-center">
-        <label className="text-[10px] font-mono tracking-[0.15em] text-[#8B949E] uppercase">{label}</label>
-        <span className="text-xs font-mono text-amber">{value}{unit}</span>
+    <div className="flex flex-col gap-2">
+      <div className="flex justify-between items-baseline">
+        <label className="text-[11px] font-medium text-[rgba(235,235,245,0.5)] uppercase tracking-wider">
+          {label}
+        </label>
+        <span className="text-[13px] font-semibold text-white tabular-nums">{value}{unit}</span>
       </div>
       <input
         type="range"
@@ -38,20 +42,25 @@ function RangeField({ label, name, value, onChange, min, max, step = 1, unit, hi
         min={min}
         max={max}
         step={step}
-        className="w-full accent-amber"
+        className="w-full accent-[#0A84FF] h-1"
       />
-      {hint && <div className="text-[10px] text-[#484F58] font-mono">{hint}</div>}
+      {hint && <div className="text-[11px] text-[rgba(235,235,245,0.25)]">{hint}</div>}
     </div>
   )
 }
 
 function Section({ title, children }) {
   return (
-    <div className="bg-panel border border-border rounded-lg p-5">
-      <div className="text-[10px] font-mono tracking-[0.2em] text-[#8B949E] uppercase mb-4">
-        {title}
+    <div className="bg-[#2C2C2E] rounded-2xl overflow-hidden">
+      <div
+        className="px-5 py-3"
+        style={SEP}
+      >
+        <span className="text-[11px] font-semibold text-[rgba(235,235,245,0.4)] uppercase tracking-wider">
+          {title}
+        </span>
       </div>
-      <div className="flex flex-col gap-4">
+      <div className="px-5 py-4 flex flex-col gap-5">
         {children}
       </div>
     </div>
@@ -146,8 +155,10 @@ export default function Settings() {
   }
 
   return (
-    <div className="p-5 max-w-3xl mx-auto flex flex-col gap-5">
-      <div className="font-mono text-sm text-[#E6EDF3] tracking-wider">SETTINGS</div>
+    <div className="p-5 max-w-2xl mx-auto flex flex-col gap-4 pb-12">
+      <div className="pt-2 pb-1">
+        <h1 className="text-[22px] font-bold text-white tracking-tight">Settings</h1>
+      </div>
 
       <Section title="Camera">
         <Field
@@ -160,13 +171,17 @@ export default function Settings() {
         <div className="flex gap-3">
           <button
             onClick={() => setTesting(t => !t)}
-            className="px-4 py-2 text-xs font-mono tracking-wider border border-border rounded hover:border-amber/40 hover:text-amber transition-colors text-[#8B949E]"
+            className="px-4 py-2 text-[13px] rounded-xl transition-colors"
+            style={{
+              border: '1px solid rgba(84,84,88,0.6)',
+              color: 'rgba(235,235,245,0.55)',
+            }}
           >
-            {testing ? 'CLOSE PREVIEW' : 'TEST CAMERA'}
+            {testing ? 'Close Preview' : 'Test Camera'}
           </button>
         </div>
         {testing && (
-          <div className="bg-black rounded overflow-hidden">
+          <div className="bg-black rounded-xl overflow-hidden">
             <img
               src={`http://${window.location.hostname}:8080/debug_feed`}
               alt="Camera preview"
@@ -191,16 +206,16 @@ export default function Settings() {
           name="min_contour_area"
           value={form.min_contour_area}
           onChange={set}
-          min={500} max={20000} step={100} unit="px²"
-          hint="Minimum moving region size to count as a board. Increase to reduce dust/noise false positives."
+          min={500} max={20000} step={100} unit=" px²"
+          hint="Minimum moving region to count as a board. Increase to filter dust and noise."
         />
         <RangeField
           label="Count Cooldown"
           name="count_cooldown_ms"
           value={form.count_cooldown_ms}
           onChange={set}
-          min={200} max={3000} step={50} unit="ms"
-          hint="Minimum time between counts on the same zone. Prevents double-counting a slow board."
+          min={200} max={3000} step={50} unit=" ms"
+          hint="Minimum time between counts. Prevents double-counting a slow board."
         />
       </Section>
 
@@ -213,13 +228,14 @@ export default function Settings() {
           type="number"
           min="1"
           step="0.5"
-          hint="Measure the real-world length of conveyor visible in the camera frame. Used to convert pixel velocity to FPM."
+          hint="Real-world length of conveyor visible in the camera frame. Used to convert pixel velocity to FPM."
         />
         <button
           onClick={handleCalibrate}
-          className="self-start px-4 py-2 text-xs font-mono tracking-wider border border-amber/40 text-amber rounded hover:bg-amber/10 transition-colors"
+          className="self-start px-4 py-2 text-[13px] rounded-xl font-medium transition-colors"
+          style={{ background: 'rgba(10,132,255,0.15)', color: '#0A84FF', border: '1px solid rgba(10,132,255,0.3)' }}
         >
-          SAVE CALIBRATION
+          Save Calibration
         </button>
       </Section>
 
@@ -229,8 +245,8 @@ export default function Settings() {
           name="downtime_threshold_seconds"
           value={form.downtime_threshold_seconds}
           onChange={set}
-          min={10} max={300} step={5} unit="s"
-          hint="Seconds of no board detection before declaring downtime."
+          min={10} max={300} step={5} unit=" s"
+          hint="Seconds with no board detection before declaring downtime."
         />
         <Field
           label="Target Pieces Per Hour"
@@ -244,58 +260,57 @@ export default function Settings() {
 
       <Section title="Shift Schedule">
         <div className="grid grid-cols-3 gap-4">
-          <Field label="Day Shift Start" name="shift_day_start" value={form.shift_day_start} onChange={set} />
-          <Field label="Afternoon Shift" name="shift_aft_start" value={form.shift_aft_start} onChange={set} />
-          <Field label="Night Shift" name="shift_night_start" value={form.shift_night_start} onChange={set} />
+          <Field label="Day Shift" name="shift_day_start" value={form.shift_day_start} onChange={set} hint="HH:MM" />
+          <Field label="Afternoon Shift" name="shift_aft_start" value={form.shift_aft_start} onChange={set} hint="HH:MM" />
+          <Field label="Night Shift" name="shift_night_start" value={form.shift_night_start} onChange={set} hint="HH:MM" />
         </div>
-        <div className="text-[10px] font-mono text-[#484F58]">24-hour format HH:MM</div>
       </Section>
 
       <Section title="Operations">
-        <div className="flex flex-col gap-2">
-          <div className="text-[10px] font-mono text-[#484F58]">
-            Deletes all piece_events recorded today. Use at shift start or after a calibration run.
+        <div className="flex flex-col gap-3">
+          <div className="text-[12px] text-[rgba(235,235,245,0.35)]">
+            Deletes all piece events recorded today. Use at shift start or after a calibration run.
           </div>
           <div className="flex items-center gap-4">
             <button
               onClick={handleReset}
-              className={`px-4 py-2 text-xs font-mono tracking-wider rounded border transition-colors ${
+              className="px-4 py-2 text-[13px] rounded-xl font-medium transition-colors"
+              style={
                 resetConfirm
-                  ? 'border-red-500 text-red-400 bg-red-500/10 hover:bg-red-500/20'
-                  : 'border-border text-[#8B949E] hover:border-red-500/40 hover:text-red-400'
-              }`}
+                  ? { background: 'rgba(255,69,58,0.12)', color: '#FF453A', border: '1px solid rgba(255,69,58,0.35)' }
+                  : { background: 'transparent', color: 'rgba(235,235,245,0.5)', border: '1px solid rgba(84,84,88,0.6)' }
+              }
             >
-              {resetConfirm ? 'CONFIRM RESET?' : 'RESET PIECE COUNT'}
+              {resetConfirm ? 'Confirm Reset?' : 'Reset Piece Count'}
             </button>
             {resetConfirm && (
               <button
                 onClick={() => setResetConfirm(false)}
-                className="text-xs font-mono text-[#484F58] hover:text-[#8B949E] transition-colors"
+                className="text-[13px] text-[rgba(235,235,245,0.35)] hover:text-white transition-colors"
               >
-                cancel
+                Cancel
               </button>
             )}
             {resetMsg && (
-              <span className="text-xs font-mono text-emerald-400">{resetMsg}</span>
+              <span className="text-[13px] text-[#30D158]">{resetMsg}</span>
             )}
           </div>
         </div>
       </Section>
 
-      {/* Save button */}
-      <div className="flex items-center gap-4">
+      {/* Save */}
+      <div className="flex items-center gap-4 pt-1">
         <button
           onClick={handleSave}
-          className="px-6 py-2.5 bg-amber/20 border border-amber/50 text-amber font-mono text-xs tracking-widest rounded hover:bg-amber/30 transition-colors"
+          className="px-6 py-2.5 text-[13px] font-semibold rounded-xl transition-colors"
+          style={{ background: '#0A84FF', color: '#fff' }}
+          onMouseEnter={e => e.currentTarget.style.background = '#409CFF'}
+          onMouseLeave={e => e.currentTarget.style.background = '#0A84FF'}
         >
-          SAVE SETTINGS
+          Save Settings
         </button>
-        {saved && (
-          <span className="text-emerald-400 font-mono text-xs">Settings saved.</span>
-        )}
-        {error && (
-          <span className="text-red-400 font-mono text-xs">{error}</span>
-        )}
+        {saved && <span className="text-[13px] text-[#30D158] font-medium">Saved.</span>}
+        {error && <span className="text-[13px] text-[#FF453A]">{error}</span>}
       </div>
     </div>
   )

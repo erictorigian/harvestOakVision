@@ -1,25 +1,60 @@
 import { formatDuration } from '../utils'
 
-const STATE_CONFIG = {
-  RUNNING: { bg: 'bg-emerald-500/20', border: 'border-emerald-500/60', text: 'text-emerald-400', dot: 'bg-emerald-400', label: 'RUNNING' },
-  SLOW:    { bg: 'bg-amber/20',       border: 'border-amber/60',       text: 'text-amber',       dot: 'bg-amber',       label: 'SLOW — POSSIBLE JAM' },
-  IDLE:    { bg: 'bg-red-500/20',     border: 'border-red-500/60',     text: 'text-red-400',     dot: 'bg-red-400',     label: 'IDLE — LINE STOPPED' },
-  UNKNOWN: { bg: 'bg-[#30363D]/40',   border: 'border-[#30363D]',      text: 'text-[#8B949E]',   dot: 'bg-[#8B949E]',   label: 'UNKNOWN' },
+const STATE = {
+  RUNNING: {
+    bg: 'rgba(48,209,88,0.1)',
+    border: 'rgba(48,209,88,0.3)',
+    dot: '#30D158',
+    text: '#30D158',
+    label: 'Running',
+    pulse: true,
+  },
+  SLOW: {
+    bg: 'rgba(255,159,10,0.1)',
+    border: 'rgba(255,159,10,0.3)',
+    dot: '#FF9F0A',
+    text: '#FF9F0A',
+    label: 'Slow — Possible Jam',
+    pulse: false,
+  },
+  IDLE: {
+    bg: 'rgba(255,69,58,0.1)',
+    border: 'rgba(255,69,58,0.3)',
+    dot: '#FF453A',
+    text: '#FF453A',
+    label: 'Idle — Line Stopped',
+    pulse: false,
+  },
+  UNKNOWN: {
+    bg: 'rgba(255,255,255,0.03)',
+    border: 'rgba(84,84,88,0.4)',
+    dot: 'rgba(235,235,245,0.3)',
+    text: 'rgba(235,235,245,0.35)',
+    label: 'Unknown',
+    pulse: false,
+  },
 }
 
 export default function StateBanner({ state = 'UNKNOWN', durationSeconds = 0 }) {
-  const cfg = STATE_CONFIG[state] ?? STATE_CONFIG.UNKNOWN
-  const duration = formatDuration(durationSeconds)
+  const cfg = STATE[state] ?? STATE.UNKNOWN
 
   return (
-    <div className={`border rounded px-3 py-1.5 flex items-center gap-2 ${cfg.bg} ${cfg.border}`}>
-      <span className={`w-2 h-2 rounded-full animate-pulse flex-shrink-0 ${cfg.dot}`} />
-      <span className={`font-mono font-bold tracking-widest text-xs ${cfg.text}`}>
+    <div
+      className="rounded-2xl px-4 py-3 flex items-center gap-3 border"
+      style={{ background: cfg.bg, borderColor: cfg.border }}
+    >
+      <span
+        className={`w-2 h-2 rounded-full flex-shrink-0 ${cfg.pulse ? 'animate-pulse' : ''}`}
+        style={{ background: cfg.dot }}
+      />
+      <span className="text-[13px] font-semibold" style={{ color: cfg.text }}>
         {cfg.label}
       </span>
-      <span className="text-[#8B949E] font-mono text-xs ml-auto">
-        {duration}
-      </span>
+      {durationSeconds > 0 && (
+        <span className="text-[13px] text-[rgba(235,235,245,0.35)] ml-auto tabular-nums">
+          {formatDuration(durationSeconds)}
+        </span>
+      )}
     </div>
   )
 }

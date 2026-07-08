@@ -8,26 +8,24 @@ export default function PieceCounter({ count = 0 }) {
     if (count !== prevRef.current) {
       prevRef.current = count
       setFlash(true)
-      const t = setTimeout(() => setFlash(false), 400)
+      const t = setTimeout(() => setFlash(false), 500)
       return () => clearTimeout(t)
     }
   }, [count])
 
   return (
-    <div className="flex flex-col items-center justify-start bg-panel border border-border rounded p-4">
-      <div className="text-[9px] font-mono tracking-[0.2em] text-[#8B949E] uppercase mb-1">
+    <div className="bg-[#2C2C2E] rounded-2xl p-6 flex flex-col items-center justify-start">
+      <div className="text-[11px] font-medium text-[rgba(235,235,245,0.5)] uppercase tracking-wider mb-4">
         Total Pieces Today
       </div>
       <div
-        className={`font-mono font-bold transition-all duration-200 ${
-          flash ? 'count-flash' : 'text-amber'
-        }`}
-        style={{ fontSize: 'clamp(2.5rem, 5vw, 4rem)', lineHeight: 1 }}
+        className={`font-bold leading-none tabular-nums ${flash ? 'count-flash' : 'text-white'}`}
+        style={{ fontSize: 'clamp(3rem, 6vw, 5rem)' }}
       >
         {count.toLocaleString()}
       </div>
-      <div className="text-[#8B949E] font-mono text-[9px] mt-1 tracking-wider">
-        PIECES COUNTED
+      <div className="text-[11px] text-[rgba(235,235,245,0.25)] mt-4 uppercase tracking-widest">
+        Pieces Counted
       </div>
     </div>
   )

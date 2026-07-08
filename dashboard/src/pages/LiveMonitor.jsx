@@ -16,7 +16,7 @@ function Clock() {
     return () => clearInterval(t)
   }, [])
   return (
-    <span className="font-mono text-sm text-[#8B949E]">
+    <span className="text-[13px] text-[rgba(235,235,245,0.4)] tabular-nums">
       {now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
     </span>
   )
@@ -28,28 +28,36 @@ export default function LiveMonitor() {
   const [debugOpen, setDebugOpen] = useState(false)
 
   const m = metrics || {}
-  const stateStartMs = m.timestamp ? Date.now() - 0 : 0
   const currentDuration = m.current_downtime_duration || 0
 
   return (
-    <div className="p-2 flex flex-col gap-2 max-w-[1600px] mx-auto">
+    <div className="p-4 flex flex-col gap-3 max-w-[1600px] mx-auto">
 
       {/* Top bar */}
-      <div className="flex items-center justify-between">
-        <div className="text-[9px] font-mono tracking-[0.2em] text-[#8B949E] uppercase">
+      <div className="flex items-center justify-between px-1 pt-1">
+        <div className="text-[12px] text-[rgba(235,235,245,0.35)]">
           {m.shift_id ? `Shift #${m.shift_id}` : 'No Active Shift'}
         </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 text-[10px] font-mono">
-            <span className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} />
-            <span className={connected ? 'text-emerald-400' : 'text-red-400'}>
-              {connected ? 'LIVE' : 'DISCONNECTED'}
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1.5">
+            <span
+              className={`w-2 h-2 rounded-full ${connected ? 'animate-pulse' : ''}`}
+              style={{ background: connected ? '#30D158' : '#FF453A' }}
+            />
+            <span className="text-[12px]" style={{ color: connected ? 'rgba(235,235,245,0.5)' : '#FF453A' }}>
+              {connected ? 'Live' : 'Disconnected'}
             </span>
           </div>
           <Clock />
           <button
             onClick={() => setDebugOpen(true)}
-            className="px-2 py-0.5 text-[9px] font-mono tracking-widest text-[#8B949E] border border-border rounded hover:border-amber/40 hover:text-amber transition-colors uppercase"
+            className="px-3 py-1 text-[12px] rounded-lg transition-colors"
+            style={{
+              border: '1px solid rgba(84,84,88,0.6)',
+              color: 'rgba(235,235,245,0.4)',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.color = '#fff'; e.currentTarget.style.borderColor = 'rgba(84,84,88,0.9)' }}
+            onMouseLeave={e => { e.currentTarget.style.color = 'rgba(235,235,245,0.4)'; e.currentTarget.style.borderColor = 'rgba(84,84,88,0.6)' }}
           >
             Debug
           </button>
@@ -59,44 +67,40 @@ export default function LiveMonitor() {
       {/* State banner */}
       <StateBanner state={m.state || 'UNKNOWN'} durationSeconds={currentDuration} />
 
-      {/* Hero metrics row */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-2">
+      {/* Metrics row */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <MetricCard
           label="Total Pieces"
           value={(m.total_pieces_today || 0).toLocaleString()}
           sub="today"
-          accent="text-amber"
         />
         <MetricCard
           label="Pieces / Hour"
           value={(m.pieces_per_hour_current || 0).toLocaleString()}
           sub="current rate"
-          accent="text-amber"
         />
         <MetricCard
           label="Line Speed"
           value={(m.line_speed_fpm_smoothed || 0).toFixed(1)}
           unit="FPM"
           sub={`instant: ${(m.line_speed_fpm || 0).toFixed(1)} FPM`}
-          accent="text-amber"
         />
         <MetricCard
-          label="Outfeed Belt Speed"
+          label="Outfeed Belt"
           value={(m.outfeed_belt_speed_fpm_smoothed || 0).toFixed(1)}
           unit="FPM"
           sub={`instant: ${(m.outfeed_belt_speed_fpm || 0).toFixed(1)} FPM`}
-          accent="text-amber"
         />
         <MetricCard
           label="Downtime Today"
           value={formatDuration(m.downtime_seconds_today || 0)}
           sub={m.state !== 'RUNNING' ? `current: ${formatDuration(currentDuration)}` : 'line running'}
-          accent={m.downtime_seconds_today > 0 ? 'text-red-400' : 'text-emerald-400'}
+          color={(m.downtime_seconds_today || 0) > 0 ? 'text-[#FF453A]' : 'text-[#30D158]'}
         />
       </div>
 
-      {/* Piece counter + camera thumbnail + downtime list */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
+      {/* Main content */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         <PieceCounter count={m.total_pieces_today || 0} />
 
         <CameraThumb
@@ -104,8 +108,8 @@ export default function LiveMonitor() {
           onClick={() => setDebugOpen(true)}
         />
 
-        <div className="bg-panel border border-border rounded p-3 flex flex-col">
-          <div className="text-[9px] font-mono tracking-[0.2em] text-[#8B949E] uppercase mb-2">
+        <div className="bg-[#2C2C2E] rounded-2xl p-4 flex flex-col">
+          <div className="text-[11px] font-medium text-[rgba(235,235,245,0.5)] uppercase tracking-wider mb-3 flex-shrink-0">
             Downtime Events — Today
           </div>
           <div className="flex-1 overflow-auto">

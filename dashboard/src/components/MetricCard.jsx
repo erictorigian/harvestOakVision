@@ -1,17 +1,20 @@
-export default function MetricCard({ label, value, unit, sub, accent = 'text-amber' }) {
+export default function MetricCard({ label, value, unit, sub, color }) {
   return (
-    <div className="bg-panel border border-border rounded p-3 flex flex-col gap-0.5 min-w-0">
-      <div className="text-[9px] font-mono tracking-[0.15em] text-[#8B949E] uppercase">
+    <div className="bg-[#2C2C2E] rounded-2xl p-4 flex flex-col gap-1 min-w-0">
+      <div className="text-[11px] font-medium text-[rgba(235,235,245,0.5)] uppercase tracking-wider leading-none">
         {label}
       </div>
-      <div className={`font-mono font-bold leading-none mt-0.5 ${accent}`} style={{ fontSize: 'clamp(1.25rem, 2vw, 2rem)' }}>
+      <div
+        className={`font-bold leading-none mt-1.5 tabular-nums ${color || 'text-white'}`}
+        style={{ fontSize: 'clamp(1.4rem, 2.2vw, 2rem)' }}
+      >
         {value ?? '—'}
         {unit && (
-          <span className="text-xs font-normal text-[#8B949E] ml-1">{unit}</span>
+          <span className="text-sm font-normal text-[rgba(235,235,245,0.35)] ml-1.5">{unit}</span>
         )}
       </div>
       {sub && (
-        <div className="text-[9px] text-[#8B949E] font-mono">{sub}</div>
+        <div className="text-[11px] text-[rgba(235,235,245,0.35)] mt-0.5">{sub}</div>
       )}
     </div>
   )

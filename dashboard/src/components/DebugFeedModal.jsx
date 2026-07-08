@@ -15,36 +15,38 @@ export default function DebugFeedModal({ open, onClose }) {
 
   return (
     <div
-      className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 flex items-center justify-center z-50 p-4"
+      style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}
       onClick={onClose}
     >
       <div
-        className="bg-panel border border-border rounded-lg overflow-hidden max-w-4xl w-full"
+        className="bg-[#2C2C2E] rounded-2xl overflow-hidden max-w-4xl w-full shadow-2xl"
         onClick={e => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-4 py-2 border-b border-border">
-          <span className="font-mono text-xs text-[#8B949E] tracking-widest uppercase">
-            Debug Feed — Camera View
-          </span>
+        <div
+          className="flex items-center justify-between px-5 py-3.5"
+          style={{ borderBottom: '1px solid rgba(84,84,88,0.4)' }}
+        >
+          <span className="text-[13px] font-semibold text-white">Debug Camera Feed</span>
           <button
             onClick={onClose}
-            className="text-[#8B949E] hover:text-[#E6EDF3] font-mono text-lg leading-none"
+            className="w-7 h-7 rounded-full flex items-center justify-center text-[rgba(235,235,245,0.5)] hover:text-white transition-colors text-sm"
+            style={{ background: 'rgba(255,255,255,0.08)' }}
           >
             ✕
           </button>
         </div>
-        <div className="p-2 bg-black">
+        <div className="bg-black">
           <img
             ref={imgRef}
             src={DEBUG_URL}
             alt="Debug camera feed"
-            className="w-full rounded"
+            className="w-full"
             onError={() => {}}
           />
         </div>
-        <div className="px-4 py-2 text-[10px] font-mono text-[#8B949E]">
-          Yellow line = detection line &nbsp;·&nbsp; Green boxes = active contours &nbsp;·&nbsp;
-          Enable DEBUG_OVERLAY=true in .env to activate
+        <div className="px-5 py-3 text-[11px] text-[rgba(235,235,245,0.35)]">
+          Green line = detection tripwire · Cyan box = belt ROI · dev= shows max deviation at tripwire
         </div>
       </div>
     </div>
