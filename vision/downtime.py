@@ -1,10 +1,12 @@
 """
-Downtime state machine.
+Downtime state machine — belt-speed driven.
+
+The belt runs continuously all day. Downtime = belt stopped, not gaps
+between parts at the counting line.
 
 States:
-  RUNNING  — boards detected within threshold window
-  SLOW     — motion detected but no board crossings
-  IDLE     — no motion detected (line stopped)
+  RUNNING  — belt moving above speed threshold
+  IDLE     — belt stopped for longer than DOWNTIME_THRESHOLD_SECONDS
   UNKNOWN  — camera issue / stream drop
 """
 from __future__ import annotations
@@ -12,7 +14,7 @@ from __future__ import annotations
 import logging
 import os
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 
 import cv2
@@ -20,9 +22,9 @@ import numpy as np
 
 logger = logging.getLogger("harvest_oak.downtime")
 
-STATES = ("RUNNING", "SLOW", "IDLE", "UNKNOWN")
+STATES = ("RUNNING", "IDLE", "UNKNOWN")
 
-_MIN_BELT_FPM = 3.0  # belt speed above this → line is running (must match SPEED_DEAD_BAND_FPM)
+_MIN_BELT_FPM = 3.0  # must match SPEED_DEAD_BAND_FPM
 
 
 @dataclass
@@ -42,20 +44,17 @@ class DowntimeRecord:
 class DowntimeTracker:
     def __init__(self, snapshot_dir: str = "/data/snapshots"):
         self.threshold_sec = float(os.environ.get("DOWNTIME_THRESHOLD_SECONDS", "45"))
-        self.motion_threshold = 0.003   # fraction of frame with motion to count as "some movement"
         self.snapshot_dir = snapshot_dir
 
         os.makedirs(snapshot_dir, exist_ok=True)
 
         self.state: str = "UNKNOWN"
-        self._last_piece_time: float = time.time()
-        self._last_motion_time: float = time.time()
+        self._last_running_time: float = time.time()
         self._state_start_time: float = time.time()
 
         self._current_downtime: Optional[DowntimeRecord] = None
         self._completed_events: list[DowntimeRecord] = []
 
-        # Accumulators for today
         self.downtime_seconds_today: int = 0
         self._day_start: float = self._today_start()
 
@@ -63,8 +62,7 @@ class DowntimeTracker:
     def _today_start() -> float:
         import datetime
         now = datetime.datetime.now()
-        midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        return midnight.timestamp()
+        return now.replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
 
     def update(
         self,
@@ -76,48 +74,29 @@ class DowntimeTracker:
     ) -> str:
         """
         Called every frame. Returns current state string.
+        Downtime is driven entirely by belt speed — not piece gaps.
         """
         now = time.time()
 
-        # Reset daily accumulator if day changed
         if now - self._day_start >= 86400:
             self.downtime_seconds_today = 0
             self._day_start = self._today_start()
 
-        # Belt movement is ground truth — if stickers are moving, line is running
-        if belt_speed_fpm >= _MIN_BELT_FPM:
-            self._last_piece_time = now
-            self._last_motion_time = now
-
-        # Update last-seen timestamps
         if not camera_ok:
             new_state = "UNKNOWN"
-        elif new_pieces > 0:
-            self._last_piece_time = now
-            self._last_motion_time = now
+        elif belt_speed_fpm >= _MIN_BELT_FPM:
+            self._last_running_time = now
             new_state = "RUNNING"
-        elif motion_level >= self.motion_threshold:
-            self._last_motion_time = now
-            since_piece = now - self._last_piece_time
-            new_state = "SLOW" if since_piece >= self.threshold_sec else "RUNNING"
         else:
-            since_piece = now - self._last_piece_time
-            since_motion = now - self._last_motion_time
-            if since_motion >= self.threshold_sec:
-                new_state = "IDLE"
-            elif since_piece >= self.threshold_sec:
-                new_state = "SLOW"
-            else:
-                new_state = "RUNNING"
+            since_running = now - self._last_running_time
+            new_state = "IDLE" if since_running >= self.threshold_sec else "RUNNING"
 
-        # State transition handling
         if new_state != self.state:
             self._on_state_change(self.state, new_state, frame, now)
             self.state = new_state
             self._state_start_time = now
 
-        # Accumulate downtime
-        if self._current_downtime and new_state in ("IDLE", "SLOW", "UNKNOWN"):
+        if self._current_downtime and new_state in ("IDLE", "UNKNOWN"):
             self.downtime_seconds_today = int(
                 sum(e.duration_seconds for e in self._completed_events
                     if e.start_time >= self._day_start)
@@ -129,15 +108,11 @@ class DowntimeTracker:
     def _on_state_change(
         self, old_state: str, new_state: str, frame: Optional[np.ndarray], now: float
     ):
-        is_downtime = new_state in ("IDLE", "SLOW", "UNKNOWN")
-        was_downtime = old_state in ("IDLE", "SLOW", "UNKNOWN")
+        is_downtime = new_state in ("IDLE", "UNKNOWN")
+        was_downtime = old_state in ("IDLE", "UNKNOWN")
 
         if is_downtime and not was_downtime:
-            # Entering downtime
-            snap_path = None
-            if frame is not None:
-                snap_path = self._save_snapshot(frame, new_state, now)
-
+            snap_path = self._save_snapshot(frame, new_state, now) if frame is not None else None
             self._current_downtime = DowntimeRecord(
                 start_time=now,
                 state=new_state,
@@ -146,7 +121,6 @@ class DowntimeTracker:
             logger.warning(f"Downtime started: {new_state} (was {old_state})")
 
         elif was_downtime and self._current_downtime:
-            # Exiting downtime
             self._current_downtime.end_time = now
             self._completed_events.append(self._current_downtime)
             logger.info(
@@ -156,14 +130,9 @@ class DowntimeTracker:
             self._current_downtime = None
 
         elif is_downtime and was_downtime and self._current_downtime:
-            # State changed within downtime (e.g. SLOW → IDLE)
-            # Close current and open new
             self._current_downtime.end_time = now
             self._completed_events.append(self._current_downtime)
-
-            snap_path = None
-            if frame is not None:
-                snap_path = self._save_snapshot(frame, new_state, now)
+            snap_path = self._save_snapshot(frame, new_state, now) if frame is not None else None
             self._current_downtime = DowntimeRecord(
                 start_time=now,
                 state=new_state,
@@ -184,13 +153,12 @@ class DowntimeTracker:
             return None
 
     def pop_completed_events(self) -> list[DowntimeRecord]:
-        """Return and clear completed events for DB insertion."""
         events = self._completed_events.copy()
         self._completed_events.clear()
         return events
 
     @property
     def current_downtime_duration(self) -> int:
-        if self._current_downtime and self.state in ("IDLE", "SLOW", "UNKNOWN"):
+        if self._current_downtime and self.state in ("IDLE", "UNKNOWN"):
             return int(time.time() - self._current_downtime.start_time)
         return 0
