@@ -31,9 +31,9 @@ _STRIP_HALF = 8
 class BoardDetector:
     def __init__(self):
         self.line_y_pct           = float(os.environ.get("DETECTION_LINE_Y_PERCENT", "50")) / 100.0
-        self.bright_threshold     = int(os.environ.get("BOARD_BRIGHT_THRESHOLD", "170"))
-        self.dark_threshold       = int(os.environ.get("BOARD_DARK_THRESHOLD", "60"))
-        self.min_board_width_pct  = float(os.environ.get("MIN_BOARD_WIDTH_PERCENT", "5")) / 100.0
+        self.bright_threshold     = int(os.environ.get("BOARD_BRIGHT_THRESHOLD", "130"))
+        self.dark_threshold       = int(os.environ.get("BOARD_DARK_THRESHOLD", "90"))
+        self.min_board_width_pct  = float(os.environ.get("MIN_BOARD_WIDTH_PERCENT", "2")) / 100.0
         self.cooldown_ms          = int(os.environ.get("COUNT_COOLDOWN_MS", "400"))
 
         self._roi_x1_pct = float(os.environ.get("BELT_X1_PCT", "0"))   / 100.0
