@@ -1,13 +1,16 @@
 """
-Board detector — dual-threshold brightness at the detection line.
+Board detector — deviation-from-belt-baseline at the detection line.
 
-Works on any board color (light or dark paint) against the tan belt:
-  - Pixels brighter than BOARD_BRIGHT_THRESHOLD → light board
-  - Pixels darker than BOARD_DARK_THRESHOLD → dark board
-  - Pixels in between → bare belt surface
+Learns the belt's appearance at the tripwire (rolling EMA), then detects
+any object that deviates from that baseline. Works for any board color
+(white, dark, tan, or anything else) without knowing brightness in advance.
 
-Belt ROI env vars (all as % of frame, 0–100):
-  BELT_X1_PCT, BELT_X2_PCT, BELT_Y1_PCT, BELT_Y2_PCT
+Key env vars:
+  LINE_DEVIATION_THRESHOLD  — pixel deviation from belt baseline to count as board (default 25)
+  MIN_BOARD_WIDTH_PERCENT   — % of belt ROI width a board must span to count (default 2)
+  COUNT_COOLDOWN_MS         — ms between counts (default 800)
+  DETECTION_LINE_Y_PERCENT  — vertical position of tripwire 0-100 (default 50)
+  BELT_X1_PCT / BELT_X2_PCT — horizontal ROI limits (default 0 / 100)
 """
 from __future__ import annotations
 
@@ -21,20 +24,20 @@ import numpy as np
 
 logger = logging.getLogger("harvest_oak.detector")
 
-# Silver tape exclusion
+# Silver tape exclusion (HSV: near-white, low saturation, high value)
 _SILVER_LOWER = np.array([0,   0,  180])
 _SILVER_UPPER = np.array([180, 50, 255])
 
-_STRIP_HALF = 8
+_STRIP_HALF = 8          # half-height of the detection strip in pixels
+_BG_ALPHA   = 0.02       # EMA speed — how fast baseline tracks belt changes
 
 
 class BoardDetector:
     def __init__(self):
-        self.line_y_pct           = float(os.environ.get("DETECTION_LINE_Y_PERCENT", "50")) / 100.0
-        self.bright_threshold     = int(os.environ.get("BOARD_BRIGHT_THRESHOLD", "130"))
-        self.dark_threshold       = int(os.environ.get("BOARD_DARK_THRESHOLD", "90"))
-        self.min_board_width_pct  = float(os.environ.get("MIN_BOARD_WIDTH_PERCENT", "2")) / 100.0
-        self.cooldown_ms          = int(os.environ.get("COUNT_COOLDOWN_MS", "400"))
+        self.line_y_pct          = float(os.environ.get("DETECTION_LINE_Y_PERCENT", "50")) / 100.0
+        self.deviation_threshold = int(os.environ.get("LINE_DEVIATION_THRESHOLD", "25"))
+        self.min_board_width_pct = float(os.environ.get("MIN_BOARD_WIDTH_PERCENT", "2")) / 100.0
+        self.cooldown_ms         = int(os.environ.get("COUNT_COOLDOWN_MS", "800"))
 
         self._roi_x1_pct = float(os.environ.get("BELT_X1_PCT", "0"))   / 100.0
         self._roi_x2_pct = float(os.environ.get("BELT_X2_PCT", "100")) / 100.0
@@ -47,6 +50,9 @@ class BoardDetector:
         self._min_board_px: int = 0
         self._roi_x1: int = 0
         self._roi_x2: int = 0
+
+        # Belt baseline — learned from frames with no board present
+        self._strip_bg: Optional[np.ndarray] = None
 
         self._board_over_line: bool = False
         self._last_count_ms: float = 0.0
@@ -62,21 +68,23 @@ class BoardDetector:
             self._roi_x1 = int(self._roi_x1_pct * w)
             self._roi_x2 = int(self._roi_x2_pct * w)
             roi_w = max(1, self._roi_x2 - self._roi_x1)
-            self._min_board_px = int(roi_w * self.min_board_width_pct)
+            self._min_board_px = max(1, int(roi_w * self.min_board_width_pct))
+            self._strip_bg = None  # reset baseline on frame size change
             logger.info(
-                f"Frame {w}x{h} — detection line Y={self._detection_y}, "
-                f"belt ROI X=[{self._roi_x1},{self._roi_x2}], "
-                f"min board width={self._min_board_px}px, "
-                f"thresholds bright>{self.bright_threshold} dark<{self.dark_threshold}"
+                f"Frame {w}x{h} — line Y={self._detection_y}, "
+                f"ROI X=[{self._roi_x1},{self._roi_x2}], "
+                f"min board={self._min_board_px}px, "
+                f"deviation threshold={self.deviation_threshold}"
             )
 
     def _board_pixels_at_line(self, frame: np.ndarray) -> tuple[int, int]:
         """
-        Return (board_pixel_count, peak_brightness) at the detection line.
+        Return (board_column_count, peak_deviation) at the detection strip.
 
-        A pixel is "board" if it is brighter than bright_threshold (light-painted
-        board) OR darker than dark_threshold (dark-painted board). The middle range
-        is the bare tan belt and is not counted.
+        board_column_count: how many ROI columns deviate from belt baseline
+        peak_deviation:     max per-column brightness deviation — use this to
+                            tune LINE_DEVIATION_THRESHOLD (set it to ~half of
+                            what you see here when a board is at the line)
         """
         h, w = frame.shape[:2]
         y0 = max(0, self._detection_y - _STRIP_HALF)
@@ -86,26 +94,32 @@ class BoardDetector:
         gray = cv2.cvtColor(strip, cv2.COLOR_BGR2GRAY)
         hsv  = cv2.cvtColor(strip, cv2.COLOR_BGR2HSV)
 
-        # Light boards (brighter than belt)
-        _, bright = cv2.threshold(gray, self.bright_threshold, 255, cv2.THRESH_BINARY)
-        # Dark boards (darker than belt)
-        _, dark   = cv2.threshold(gray, self.dark_threshold,   255, cv2.THRESH_BINARY_INV)
-        # Silver tape exclusion
-        silver = cv2.inRange(hsv, _SILVER_LOWER, _SILVER_UPPER)
-
-        board_mask = cv2.bitwise_or(bright, dark)
-        board_mask = cv2.bitwise_and(board_mask, cv2.bitwise_not(silver))
-
-        line_1d = np.max(board_mask, axis=0)
-        if self._roi_x1 > 0:
-            line_1d[:self._roi_x1] = 0
-        if self._roi_x2 < w:
-            line_1d[self._roi_x2:] = 0
-
+        # Per-column mean brightness within ROI
         roi_gray = gray[:, self._roi_x1:self._roi_x2]
-        peak = int(np.max(roi_gray)) if roi_gray.size > 0 else 0
+        if roi_gray.size == 0:
+            return 0, 0
+        col_means = np.mean(roi_gray, axis=0).astype(np.float32)
 
-        return int(np.count_nonzero(line_1d)), peak
+        # Initialize baseline on first frame
+        if self._strip_bg is None or self._strip_bg.shape != col_means.shape:
+            self._strip_bg = col_means.copy()
+            return 0, 0
+
+        deviation = np.abs(col_means - self._strip_bg)
+
+        # Zero out silver tape columns so tape marks don't trigger counts
+        silver = cv2.inRange(hsv, _SILVER_LOWER, _SILVER_UPPER)
+        silver_cols = np.max(silver, axis=0)[self._roi_x1:self._roi_x2].astype(bool)
+        deviation[silver_cols] = 0
+
+        board_cols = int(np.count_nonzero(deviation > self.deviation_threshold))
+        peak_dev   = int(np.max(deviation)) if deviation.size > 0 else 0
+
+        # Update baseline only when no board is present (avoid learning boards as belt)
+        if board_cols < self._min_board_px:
+            self._strip_bg = (1.0 - _BG_ALPHA) * self._strip_bg + _BG_ALPHA * col_means
+
+        return board_cols, peak_dev
 
     def process_frame(
         self, frame: np.ndarray, debug: bool = False
@@ -114,7 +128,7 @@ class BoardDetector:
         self._setup(h, w)
 
         now_ms = time.time() * 1000
-        board_px, peak = self._board_pixels_at_line(frame)
+        board_px, peak_dev = self._board_pixels_at_line(frame)
         board_now = board_px >= self._min_board_px
 
         new_pieces = 0
@@ -131,7 +145,7 @@ class BoardDetector:
                     "x": w // 2,
                     "y": self._detection_y,
                 })
-                logger.debug(f"Board #{self.total_pieces} — {board_px}px, peak={peak}")
+                logger.debug(f"Board #{self.total_pieces} — {board_px}cols, dev={peak_dev}")
 
         self._board_over_line = board_now
 
@@ -152,9 +166,9 @@ class BoardDetector:
             cv2.line(debug_frame, (self._roi_x2, self._detection_y), (w, self._detection_y), (60, 60, 60), 1)
 
             if board_now:
-                label = f"BOARD {board_px}px/{self._min_board_px}px  peak={peak}"
+                label = f"BOARD {board_px}cols/{self._min_board_px}cols  dev={peak_dev}"
             else:
-                label = f"LINE  {board_px}px/{self._min_board_px}px  peak={peak}  >{self.bright_threshold}/<{self.dark_threshold}"
+                label = f"LINE  {board_px}cols/{self._min_board_px}cols  dev={peak_dev}  thr={self.deviation_threshold}"
             cv2.putText(debug_frame, label,
                         (self._roi_x1 + 4, self._detection_y - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.45, line_color, 1)
