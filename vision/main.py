@@ -190,8 +190,9 @@ async def run():
         fg_mask = detector.get_fg_mask(frame)
         motion = detector.motion_level(fg_mask)
 
-        # Downtime
-        state = downtime_tracker.update(new_pieces, motion, frame, camera_ok=True, belt_speed_fpm=outfeed_smoothed)
+        # Downtime — use optical flow speed for the primary (left) belt;
+        # tape tracker (outfeed_smoothed) targets a different belt in this setup
+        state = downtime_tracker.update(new_pieces, motion, frame, camera_ok=True, belt_speed_fpm=fpm_smoothed)
 
         # Accumulate minute stats
         pieces_this_minute += new_pieces
