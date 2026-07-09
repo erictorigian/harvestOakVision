@@ -2,34 +2,34 @@ import { formatDuration } from '../utils'
 
 const STATE = {
   RUNNING: {
-    bg: 'rgba(48,209,88,0.1)',
-    border: 'rgba(48,209,88,0.3)',
-    dot: '#30D158',
-    text: '#30D158',
+    bg: 'rgba(61,145,72,0.12)',
+    border: 'rgba(61,145,72,0.35)',
+    dot: '#3D9148',
+    text: '#5DB869',
     label: 'Running',
     pulse: true,
   },
   SLOW: {
-    bg: 'rgba(255,159,10,0.1)',
-    border: 'rgba(255,159,10,0.3)',
-    dot: '#FF9F0A',
-    text: '#FF9F0A',
+    bg: 'rgba(210,140,30,0.1)',
+    border: 'rgba(210,140,30,0.3)',
+    dot: '#D28C1E',
+    text: '#E0A030',
     label: 'Slow — Possible Jam',
     pulse: false,
   },
   IDLE: {
-    bg: 'rgba(255,69,58,0.1)',
-    border: 'rgba(255,69,58,0.3)',
-    dot: '#FF453A',
-    text: '#FF453A',
+    bg: 'rgba(200,82,42,0.1)',
+    border: 'rgba(200,82,42,0.3)',
+    dot: '#C8522A',
+    text: '#E06040',
     label: 'Idle — Line Stopped',
     pulse: false,
   },
   UNKNOWN: {
-    bg: 'rgba(255,255,255,0.03)',
-    border: 'rgba(84,84,88,0.4)',
-    dot: 'rgba(235,235,245,0.3)',
-    text: 'rgba(235,235,245,0.35)',
+    bg: 'rgba(255,255,255,0.02)',
+    border: 'rgba(61,145,72,0.2)',
+    dot: 'rgba(237,232,223,0.25)',
+    text: 'rgba(237,232,223,0.35)',
     label: 'Unknown',
     pulse: false,
   },
@@ -51,7 +51,7 @@ export default function StateBanner({ state = 'UNKNOWN', durationSeconds = 0 }) 
         {cfg.label}
       </span>
       {durationSeconds > 0 && (
-        <span className="text-[13px] text-[rgba(235,235,245,0.35)] ml-auto tabular-nums">
+        <span className="text-[13px] text-[rgba(237,232,223,0.35)] ml-auto tabular-nums">
           {formatDuration(durationSeconds)}
         </span>
       )}

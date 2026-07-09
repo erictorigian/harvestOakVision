@@ -42,9 +42,9 @@ export default function LiveMonitor() {
           <div className="flex items-center gap-1.5">
             <span
               className={`w-2 h-2 rounded-full ${connected ? 'animate-pulse' : ''}`}
-              style={{ background: connected ? '#30D158' : '#FF453A' }}
+              style={{ background: connected ? '#3D9148' : '#C8522A' }}
             />
-            <span className="text-[12px]" style={{ color: connected ? 'rgba(235,235,245,0.5)' : '#FF453A' }}>
+            <span className="text-[12px]" style={{ color: connected ? 'rgba(237,232,223,0.5)' : '#C8522A' }}>
               {connected ? 'Live' : 'Disconnected'}
             </span>
           </div>
@@ -95,7 +95,7 @@ export default function LiveMonitor() {
           label="Downtime Today"
           value={formatDuration(m.downtime_seconds_today || 0)}
           sub={m.state !== 'RUNNING' ? `current: ${formatDuration(currentDuration)}` : 'line running'}
-          color={(m.downtime_seconds_today || 0) > 0 ? 'text-[#FF453A]' : 'text-[#30D158]'}
+          color={(m.downtime_seconds_today || 0) > 0 ? 'text-[#E06040]' : 'text-[#5DB869]'}
         />
       </div>
 
@@ -108,8 +108,8 @@ export default function LiveMonitor() {
           onClick={() => setDebugOpen(true)}
         />
 
-        <div className="bg-[#2C2C2E] rounded-2xl p-4 flex flex-col">
-          <div className="text-[11px] font-medium text-[rgba(235,235,245,0.5)] uppercase tracking-wider mb-3 flex-shrink-0">
+        <div className="bg-[#162919] rounded-2xl p-4 flex flex-col" style={{ border: '1px solid rgba(61,145,72,0.15)' }}>
+          <div className="text-[11px] font-medium text-[rgba(237,232,223,0.5)] uppercase tracking-wider mb-3 flex-shrink-0">
             Downtime Events — Today
           </div>
           <div className="flex-1 overflow-auto">

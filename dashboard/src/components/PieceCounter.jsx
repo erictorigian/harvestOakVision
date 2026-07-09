@@ -14,17 +14,17 @@ export default function PieceCounter({ count = 0 }) {
   }, [count])
 
   return (
-    <div className="bg-[#2C2C2E] rounded-2xl p-6 flex flex-col items-center justify-start">
-      <div className="text-[11px] font-medium text-[rgba(235,235,245,0.5)] uppercase tracking-wider mb-4">
+    <div className="bg-[#162919] rounded-2xl p-6 flex flex-col items-center justify-start" style={{ border: '1px solid rgba(61,145,72,0.15)' }}>
+      <div className="text-[11px] font-medium text-[rgba(237,232,223,0.5)] uppercase tracking-wider mb-4">
         Total Pieces Today
       </div>
       <div
-        className={`font-bold leading-none tabular-nums ${flash ? 'count-flash' : 'text-white'}`}
+        className={`font-bold leading-none tabular-nums ${flash ? 'count-flash' : 'text-[#EDE8DF]'}`}
         style={{ fontSize: 'clamp(3rem, 6vw, 5rem)' }}
       >
         {count.toLocaleString()}
       </div>
-      <div className="text-[11px] text-[rgba(235,235,245,0.25)] mt-4 uppercase tracking-widest">
+      <div className="text-[11px] text-[rgba(237,232,223,0.25)] mt-4 uppercase tracking-widest">
         Pieces Counted
       </div>
     </div>

@@ -6,8 +6,8 @@
 
 html, body, #root {
   height: 100%;
-  background-color: #1C1C1E;
-  color: #FFFFFF;
+  background-color: #0F1B11;
+  color: #EDE8DF;
 }
 
 body {
@@ -18,12 +18,12 @@ body {
 
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(84,84,88,0.65); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(120,120,128,0.6); }
+::-webkit-scrollbar-thumb { background: rgba(61,145,72,0.4); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(61,145,72,0.65); }
 
 @keyframes count-flash {
-  0%   { color: #30D158; }
-  100% { color: #FFFFFF; }
+  0%   { color: #3D9148; }
+  100% { color: #EDE8DF; }
 }
 .count-flash {
   animation: count-flash 0.5s ease-out forwards;

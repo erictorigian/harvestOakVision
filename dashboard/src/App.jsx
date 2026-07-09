@@ -12,21 +12,24 @@ const NAV = [
 export default function App() {
   return (
     <BrowserRouter>
-      <div className="min-h-screen flex flex-col bg-[#1C1C1E] text-white">
+      <div className="min-h-screen flex flex-col bg-[#0F1B11] text-[#EDE8DF]">
         <nav
           className="sticky top-0 z-40 border-b"
           style={{
-            background: 'rgba(28,28,30,0.85)',
+            background: 'rgba(15,27,17,0.90)',
             backdropFilter: 'blur(20px)',
             WebkitBackdropFilter: 'blur(20px)',
-            borderColor: 'rgba(84,84,88,0.45)',
+            borderColor: 'rgba(61,145,72,0.25)',
           }}
         >
-          <div className="flex items-center px-5 h-12 gap-6">
-            <span className="text-[13px] font-semibold tracking-tight text-white select-none">
-              Harvest Oak Vision
+          <div className="flex items-center px-5 h-12 gap-5">
+            <div className="flex items-center bg-white rounded-md px-2 py-1 h-7 flex-shrink-0">
+              <img src="/harvest-oak-logo.png" alt="Harvest Oak" className="h-5 w-auto object-contain" />
+            </div>
+            <span className="text-[11px] font-medium tracking-widest uppercase text-[rgba(237,232,223,0.35)] select-none hidden sm:block">
+              Production Monitor
             </span>
-            <div className="flex gap-0.5">
+            <div className="flex gap-0.5 ml-auto">
               {NAV.map(({ to, label }) => (
                 <NavLink
                   key={to}
@@ -35,10 +38,14 @@ export default function App() {
                   className={({ isActive }) =>
                     `px-3 py-1.5 text-[13px] rounded-lg transition-colors ${
                       isActive
-                        ? 'bg-white/[0.12] text-white font-medium'
-                        : 'text-[rgba(235,235,245,0.55)] hover:text-white hover:bg-white/[0.06]'
+                        ? 'font-medium'
+                        : 'hover:bg-white/[0.05]'
                     }`
                   }
+                  style={({ isActive }) => ({
+                    color: isActive ? '#3572C6' : 'rgba(237,232,223,0.5)',
+                    background: isActive ? 'rgba(53,114,198,0.12)' : undefined,
+                  })}
                 >
                   {label}
                 </NavLink>
